@@ -39,3 +39,7 @@ Synthetic examples (not user data):
 - https://opencode.ai/docs/migrate-v1/
 
 No installed CLI was run by this documentation review. Keep #7 open; prompt-only execution and allowance reuse remain separate #11 and #13 gates.
+
+## Follow-up: catalog and default-model fallback
+
+Official documentation reviewed 2026-11-25: https://opencode.ai/docs/console/api/models/ documents GET https://opencode.ai/console/api/v1/models, returning caller-accessible providers and model IDs. This is a Console-specific authenticated catalog, not a substitute for installed CLI/project-context discovery, and does not establish all configured custom routes. Prefer the installed CLI and existing authentication; no new API key or automatic API fallback. https://opencode.ai/docs/models/ documents project-specific availability and a default-model fallback when the configured model is unavailable. Preserve configured versus effective model identity and mark unresolved effective assignments. For later bounded inference (#11), verify the exact effective route/model and fail closed if substitution cannot be prevented or detected before dispatch. Do not treat an upstream default fallback as user approval. No live requests performed in this follow-up.
