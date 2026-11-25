@@ -41,3 +41,7 @@ Show reference workload costs separately from observed charges and quota usage. 
 ## Remaining gates
 
 Validate actual public catalog payloads and exact route/variant, cache/effort and context tier applicability, source rights, versioned billing transformations and numeric precision tests before production adapters. Verify account-specific behavior separately under #13; no new live inference, subscription, or spending for this spike. No implementation or full tariff coverage established. Keep #6 open until acceptance criteria are satisfied.
+
+## OpenCode structured price evidence (2026-11-25)
+
+The installed OpenCode v2.4.1 model discovery response exposes cost arrays. User-local structural inspection reports both entries with and without an optional tier field (see #7 / PR #22). Official Model.Cost schema at https://opencode.ai/docs/api specifies USD per million tokens for input/output, optional tier and cache object; https://opencode.ai/docs/console/providers documents context-tier configuration. This supports using verified route-specific rates where explicitly selected. Nested tier semantics, cache units and effective applicability still require validation; never assume the first or last entry corresponds to Peak Off or Small. Missing applicable rates remain unknown. No raw user configuration or inference performed.
