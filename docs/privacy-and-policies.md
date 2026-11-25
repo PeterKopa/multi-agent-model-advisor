@@ -24,7 +24,7 @@ Use Go standard-library AES-256-GCM (crypto/aes, crypto/cipher, crypto/rand) to 
 
 ### Transport authenticity
 
-The credential must only be sent over authenticated TLS to the explicitly allowed OpenRouter origin and read-only endpoint. Standard chain/hostname verification is mandatory; no insecure override. TLS protects against interception by parties without a trusted certificate, not a compromised trust store, process, or operating system. Do not claim absolute MITM prevention. Keep TLS protection independent of AES-GCM session storage and OS-protected persistent storage. See integrations.md for redirect, proxy and certificate-rotation policy.
+The credential must only be sent over authenticated TLS to the explicitly allowed OpenRouter origin and read-only endpoint. Fail closed without automatic fallback or retry on request, encryption, storage, or security failures. Never weaken protection, substitute another credential or route, or silently change the selected storage mode. Any new permitted operation requires explicit user action under unchanged mandatory security rules. Standard chain/hostname verification is mandatory; no insecure override. TLS protects against interception by parties without a trusted certificate, not a compromised trust store, process, or operating system. Do not claim absolute MITM prevention. Keep TLS protection independent of AES-GCM session storage and OS-protected persistent storage. See integrations.md for redirect, proxy and certificate-rotation policy.
 
 ## Geographic eligibility and data residency
 
