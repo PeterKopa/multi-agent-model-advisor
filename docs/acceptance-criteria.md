@@ -53,7 +53,7 @@
 - [ ] Specify and test 70% default coverage, mathematical bounds, common-subset comparison, mandatory missing values, no-score states and comparable default-effort evidence.
 - [ ] Define all-agent evaluation, project overview including unresolved agents, individual re-evaluation, collaboration context and warnings without fabricated team scores; manual and AI-disabled flows work.
 - [ ] Specify reference-cost inputs, cache semantics, unknown costs, proxy provenance and RTK double-count protection; per-agent threshold and cost recommendation remain independent of rank.
-- [ ] Define independent optional Test Judge profile and small prompt tests (#2), separate consent, safe bounded execution, manual and judge assessments kept separate from public scores, no silent fallback.
+- [ ] Define independent optional Test Judge profile and small prompt tests (#2), separate consent, safe bounded execution, manual entry of existing responses, manual and judge assessments kept separate from public scores, no silent fallback.
 - [ ] Phase 0 checks document actual data/adapter capabilities and allowance reuse, limitations and manual alternatives before dependent implementation; tests and privacy gates are explicit.
 - [ ] German/English glossary, keyboard usability, project overview, simple defaults and advanced settings separation are documented.
 - [ ] The reviewed documents are merged and referenced by issue #1; follow-up implementation work is divided into bounded tasks with dependencies. No unchecked item is represented as completed.
