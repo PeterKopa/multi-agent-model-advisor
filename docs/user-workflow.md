@@ -64,7 +64,7 @@ Reviewed requirements for [issue #1](https://github.com/PeterKopa/multi-agent-mo
 1. Create/open YAML project, import or manually define agents.
 2. Select backends then cloud models, confirm shortlist; resolve only applicable filters.
 3. Review benchmark selections/weights and requirements manually or with optional AI assistance. Apply inherited defaults and overrides.
-4. Evaluate all agents; inspect overview, individual details and copy exact model IDs. Save results. Optional practical tests are a separate action, not triggered by scoring.
+4. Evaluate all agents; inspect overview, individual details and copy exact model IDs. Save results. Optional practical tests are a separate action, not triggered by scoring. Allow manual entry of previously obtained responses; judging these still requires explicit consent and a validated hosted judge route. See #2.
 
 Keep advanced settings collapsed. Provide keyboard navigation, search, bulk actions, clear progress/cancellation/errors, contextual help and offline/manual fallback. Use English/German terms consistently:
 
