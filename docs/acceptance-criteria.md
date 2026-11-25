@@ -57,3 +57,5 @@
 - [ ] Phase 0 checks document actual data/adapter capabilities and allowance reuse, limitations and manual alternatives before dependent implementation; tests and privacy gates are explicit.
 - [ ] German/English glossary, keyboard usability, project overview, simple defaults and advanced settings separation are documented.
 - [ ] The reviewed documents are merged and referenced by issue #1; follow-up implementation work is divided into bounded tasks with dependencies. No unchecked item is represented as completed.
+
+- [ ] Optional OpenRouter benchmark-data credential setup explains purpose, supports skip/session-only/default or explicitly opted-in protected OS storage, masked input, read-only connection test, replacement and forgetting; verify no secret leakage, no plaintext fallback, no inference use, and offline/manual fallback. Validate supported platform stores and failure handling with synthetic keys only.
