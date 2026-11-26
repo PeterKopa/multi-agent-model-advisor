@@ -192,7 +192,8 @@ jobs:
   # Deliberate Trivy policy: the gate covers fixed HIGH/CRITICAL
   # vulnerabilities plus secrets and misconfigurations at the selected
   # severity. `ignore-unfixed: true` means vulnerabilities with no available
-  # fix are excluded from the scan and the gate, and severities below HIGH
+  # fix are excluded from reported findings and the gate (the scan still
+  # runs), and severities below HIGH
   # are not gated. A green run is evidence for this configured scope, not
   # proof that no vulnerabilities exist.
   trivy:
