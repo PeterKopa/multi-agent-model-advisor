@@ -60,13 +60,14 @@ loaded into every agent through `opencode.jsonc`.
   model-agnostic defaults and non-secret configuration only.
 - Never read or write credential stores or secret files — `~/.ssh/`, `~/.aws/`,
   `~/.gnupg/`, `~/.config/gh/`, `~/.local/share/opencode/auth.json` and every
-  `*.env` / `*.env.*` file except the committed `.env.example`. The permission
+  `*.env` / `*.env.*` file except an `.env.example` or `*.env.example`
+  template, if present. The permission
   policy denies file access to them and mirrors the same locations in shell
   command strings.
 - Access outside the worktree requires approval. Paths outside the active
   worktree resolve to `ask` for the `external_directory` gate and for RTK
-  commands; `~/.config/opencode/*` stays local and is readable and editable on
-  approval only.
+  commands; `~/.config/opencode/*` stays local and is readable, editable and
+  reachable from shell command arguments on approval only.
 - Scratch work belongs under `.tmp/` inside the worktree and must be removed
   before the task reports back. Do not copy test material to `/tmp` or the home
   directory.

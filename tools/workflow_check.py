@@ -6,7 +6,9 @@ The validator checks four things without network access or credentials:
 1. the project agent configuration and its permission boundaries, including
    the RTK mirror policy, the Go quality-toolchain allows, the credential-path
    denials, the ask rules for infrastructure tools and paths outside the
-   worktree, and the human-only merge enforcement;
+   worktree, and the human-only merge enforcement. Compound shell samples are
+   split into subcommands so the per-agent expectations follow OpenCode's
+   scanner-based shell permission model;
 2. ADR baseline handling when an open pull request declares an ADR accepted,
    including reference and identifier validation for the ADR links;
 3. feedback reconciliation with synthetic reports, including an omitted
@@ -183,6 +185,9 @@ SENSITIVE_SHELL_SAMPLES = [
     "cat .env",
     "cat config/.env.local",
 ]
+# Env templates are not tracked in the repository, but the policy re-enables
+# an `*.env.example` template if one is present, so the shell allow must stay
+# proven. Dead-code guard: every sample in this list must be asserted.
 ENV_ALLOW_SHELL_SAMPLES = ["cat .env.example", "cat config/.env.example"]
 
 TOOLCHAIN_DENY_SAMPLES = ["pnpm install", "rtk pnpm install", "dotnet build", "rtk dotnet build"]
@@ -214,6 +219,30 @@ GH_API_DENY_SAMPLES = [
     "gh workflow run test.yml",
 ]
 
+# Compound commands with a protected operation. OpenCode's shell scanner
+# produces one command string per subcommand, so the protected operation is
+# denied in direct and compound invocations and these samples resolve to deny
+# for every agent under the per-subcommand model.
+COMPOUND_PROTECTED_DENY_SAMPLES = [
+    "git fetch origin && gh pr merge 1",
+    "git commit -m x && gh api -X PUT repos/o/r/pulls/1/merge",
+    "git stash && git push origin main",
+]
+
+# Compounds every extracted subcommand of which resolves to allow: read-only
+# inspection for all agents, and for the Git Manager a legitimate chained write
+# that must not break (git add/commit followed by a push to a feature branch).
+HARMLESS_COMPOUND_ALLOW_SAMPLES = ["git status --short && git diff"]
+COMPOUND_GIT_MANAGER_ALLOW_SAMPLES = [
+    "git add . && git push origin HEAD",
+    "git commit -m x && git push -u origin issue-30-multi-agent-development-workflow",
+]
+
+# The personal OpenCode configuration is reachable from shell arguments too.
+# The mirror rule asks, never denies, so the location stays approval-only for
+# every agent.
+OPENCODE_CONFIG_SHELL_SAMPLE = "cat ~/.config/opencode/opencode.json"
+
 # Direct pushes to main are denied even for the Git Manager.
 PUSH_TO_MAIN_DENY_SAMPLES = [
     "git push origin main",
@@ -239,6 +268,7 @@ GIT_MANAGER_WRITE_COMMANDS = [
     "git branch feature",
     "git switch -c feature",
     "gh pr create --title test",
+    "gh pr create --title x --body-file .tmp/pr.md",
     "rtk git add .",
     "rtk git branch feature",
     "rtk git checkout -b feature",
@@ -582,14 +612,99 @@ def rule_matches(rule: dict[str, Any], action: str, value: str) -> bool:
     return fnmatch.fnmatchcase(value, resource)
 
 
-def effective_effect(
+def resolve_last_match(
     rules: list[dict[str, Any]], action: str, value: str
 ) -> str:
+    """Resolve one value with ordered rules and last-match-wins semantics."""
     effect = "allow"
     for rule in rules:
         if rule_matches(rule, action, value):
             effect = str(rule.get("effect", "allow"))
     return effect
+
+
+def split_shell_subcommands(command: str) -> list[str]:
+    """Split a shell command on top-level separators, best-effort.
+
+    This approximates OpenCode's shell scanner (see the "Scanner" section of
+    https://opencode.ai/docs/permissions): shell permission checks run on
+    scanner-produced command strings and compound commands may produce several.
+    Separators inside single or double quotes or after a backslash escape do
+    not split, so a hidden write inside a quoted wrapper argument such as
+    'rtk test "govulncheck ./...; git push origin main"' stays one subcommand.
+    Constructs this model cannot analyse resolve as one string and rely on the
+    runtime scanner with its fail-closed behaviour for unanalyzable commands.
+    """
+    parts: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if escaped:
+            current.append(char)
+            escaped = False
+            index += 1
+            continue
+        if quote:
+            current.append(char)
+            if quote == '"' and char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            index += 1
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            index += 1
+            continue
+        if command[index : index + 2] in {"&&", "||"}:
+            parts.append("".join(current))
+            current = []
+            index += 2
+            continue
+        if char in {";", "|", "\n"}:
+            parts.append("".join(current))
+            current = []
+            index += 1
+            continue
+        current.append(char)
+        index += 1
+    parts.append("".join(current))
+    cleaned = [part.strip() for part in parts if part.strip()]
+    return cleaned
+
+
+def effective_effect(rules: list[dict[str, Any]], action: str, value: str) -> str:
+    """Resolve one sample against the ordered rules.
+
+    Shell samples are compound-aware: a command with top-level separators is
+    split into subcommands, each is resolved with last-match-wins semantics and
+    the results combine as any deny -> deny, else any ask -> ask, else allow.
+    This models OpenCode's per-subcommand scanner evaluation at a best-effort
+    level; unanalyzable constructs rely on the scanner's fail-closed behaviour.
+    Non-shell actions and separator-free commands resolve as one string.
+    """
+    if action == "shell":
+        subcommands = split_shell_subcommands(value)
+        if len(subcommands) > 1:
+            effects = [
+                resolve_last_match(rules, action, subcommand)
+                for subcommand in subcommands
+            ]
+            if "deny" in effects:
+                return "deny"
+            if "ask" in effects:
+                return "ask"
+            return "allow"
+    return resolve_last_match(rules, action, value)
 
 
 def reject_dangerous_rules(scope: str, rules: list[dict[str, Any]]) -> None:
@@ -658,10 +773,15 @@ def policy_expectations(agent: str) -> list[tuple[str, str, str]]:
         + PUSH_TO_MAIN_DENY_SAMPLES
         + GH_API_DENY_SAMPLES
         + NESTED_WRITE_DENY_SAMPLES
+        + COMPOUND_PROTECTED_DENY_SAMPLES
         + TOOLCHAIN_DENY_SAMPLES
         + WRAPPER_DENY_SAMPLES
     ):
         add(("shell", command, "deny"))
+
+    for command in HARMLESS_COMPOUND_ALLOW_SAMPLES + ENV_ALLOW_SHELL_SAMPLES:
+        add(("shell", command, "allow"))
+    add(("shell", OPENCODE_CONFIG_SHELL_SAMPLE, "ask"))
 
     for path in SENSITIVE_PATH_SAMPLES:
         add(("read", path, "deny"))
@@ -693,7 +813,7 @@ def policy_expectations(agent: str) -> list[tuple[str, str, str]]:
     )
 
     wanted = "allow" if agent == "git-manager" else "deny"
-    for command in GIT_MANAGER_WRITE_COMMANDS:
+    for command in GIT_MANAGER_WRITE_COMMANDS + COMPOUND_GIT_MANAGER_ALLOW_SAMPLES:
         add(("shell", command, wanted))
     return expectations
 
@@ -726,10 +846,15 @@ def check_project_rules(rules: list[dict[str, Any]]) -> None:
         + ["gh pr create --title test", "rtk git add .", "rtk git commit -m test", "rtk gh pr create --title test"]
         + GH_API_DENY_SAMPLES
         + NESTED_WRITE_DENY_SAMPLES
+        + COMPOUND_PROTECTED_DENY_SAMPLES
         + TOOLCHAIN_DENY_SAMPLES
         + WRAPPER_DENY_SAMPLES
     ):
         expect("shell", command, "deny")
+
+    for command in HARMLESS_COMPOUND_ALLOW_SAMPLES + ENV_ALLOW_SHELL_SAMPLES:
+        expect("shell", command, "allow")
+    expect("shell", OPENCODE_CONFIG_SHELL_SAMPLE, "ask")
 
     for command in (
         INFRA_ASK_SAMPLES
@@ -1167,6 +1292,125 @@ def check_adr_fixture() -> None:
     )
 
 
+def synthetic_adr(adr_id: str, status: str, source: str, **overrides: Any) -> dict[str, Any]:
+    """Build an in-memory ADR record for the self-test fixture.
+
+    The fields mirror the dictionary produced by adr_from_text so the
+    evaluation logic is exercised without new repository files.
+    """
+    adr = {
+        "id": adr_id,
+        "title": f"{adr_id} synthetic workflow decision",
+        "status": status,
+        "date": "2026-01-01",
+        "issues": ["30"],
+        "supersedes": [],
+        "superseded-by": None,
+        "conflicts-with": [],
+        "body_sha256": hashlib.sha256(f"# {adr_id} body".encode("utf-8")).hexdigest(),
+        "path": f"docs/adr/{adr_id}-synthetic.md",
+        "source": source,
+    }
+    adr.update(overrides)
+    return adr
+
+
+def check_adr_in_memory_fixture() -> None:
+    """Self-test the ADR evaluation helpers with records built in code."""
+    unchanged = synthetic_adr("ADR-0100", "Accepted", "merged")
+    same_body = synthetic_adr("ADR-0100", "Accepted", "merged")
+    edited_body = synthetic_adr("ADR-0100", "Accepted", "merged", body_sha256="0" * 64)
+    require(
+        adr_signature(unchanged) == adr_signature(same_body),
+        "adr_signature must be stable for an unchanged ADR body",
+    )
+    require(
+        adr_signature(unchanged) != adr_signature(edited_body),
+        "adr_signature must change when the ADR body changes",
+    )
+
+    def expect_error(label: str, call: Any, needle: str) -> None:
+        try:
+            call()
+        except CheckError as error:
+            require(
+                needle in str(error),
+                f"{label}: expected error containing {needle!r}, got: {error}",
+            )
+            return
+        raise CheckError(f"{label}: expected CheckError containing {needle!r}")
+
+    merged_accepted = [synthetic_adr("ADR-0101", "Accepted", "merged")]
+    expect_error(
+        "unknown superseded-by",
+        lambda: evaluate_adrs(
+            merged_accepted,
+            [
+                synthetic_adr(
+                    "ADR-0102", "Proposed", "open_pr", **{"superseded-by": "ADR-0999"}
+                )
+            ],
+        ),
+        "references unknown ADR ADR-0999",
+    )
+
+    merged_rejected = [synthetic_adr("ADR-0103", "Rejected", "merged")]
+    expect_error(
+        "identifier collision",
+        lambda: evaluate_adrs(
+            merged_rejected,
+            [synthetic_adr("ADR-0103", "Proposed", "open_pr")],
+        ),
+        "collides with merged ADR ADR-0103",
+    )
+
+    merged_mixed = [
+        synthetic_adr("ADR-0104", "Accepted", "merged"),
+        synthetic_adr("ADR-0105", "Superseded", "merged"),
+    ]
+    expect_error(
+        "conflict with merged non-accepted ADR",
+        lambda: evaluate_adrs(
+            merged_mixed,
+            [
+                synthetic_adr(
+                    "ADR-0106", "Proposed", "open_pr", **{"conflicts-with": ["ADR-0105"]}
+                )
+            ],
+        ),
+        "conflict references a non-accepted ADR: ADR-0105",
+    )
+
+    proposed = evaluate_adrs(
+        merged_accepted,
+        [
+            synthetic_adr("ADR-0108", "Accepted", "open_pr"),
+            synthetic_adr("ADR-0109", "Rejected", "open_pr"),
+            synthetic_adr("ADR-0110", "Superseded", "open_pr"),
+            synthetic_adr("ADR-0111", "In Review", "open_pr"),
+        ],
+    )[1]
+    mapping = {
+        proposal["id"]: (proposal["declared_status"], proposal["effective_status"])
+        for proposal in proposed
+    }
+    require(
+        mapping
+        == {
+            "ADR-0108": ("Accepted", "Proposed"),
+            "ADR-0109": ("Rejected", "Proposed"),
+            "ADR-0110": ("Superseded", "Proposed"),
+            "ADR-0111": ("In Review", "In Review"),
+        },
+        f"open pull-request status mapping mismatch: {mapping}",
+    )
+    print(
+        "PASS adr in-memory fixtures: body-signature stability, unknown "
+        "references, identifier collisions, non-accepted conflicts and "
+        "open pull-request status mapping are enforced"
+    )
+
+
 def check_permissions_fixture() -> None:
     base = FIXTURES / "permissions"
     broad_rules = parse_permissions(base / "planner-broad-allow.md")
@@ -1189,6 +1433,7 @@ def check_permissions_fixture() -> None:
 
 def check_fixtures() -> None:
     check_adr_fixture()
+    check_adr_in_memory_fixture()
     check_permissions_fixture()
     check_reports(FIXTURES / "workflow" / "scenario.json")
 

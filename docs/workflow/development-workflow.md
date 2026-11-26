@@ -42,6 +42,18 @@ overturned by a later agent allow. Effects are `deny` (blocked without
 approval), `ask` (the operator must approve) and `allow`. The project policy
 reads in that order: deny → allow → ask → deny.
 
+Shell permission checks use OpenCode's built-in shell scanner across Bash,
+Zsh, POSIX sh and PowerShell (see the "Scanner" section of
+<https://opencode.ai/docs/permissions>). The `shell` resource is the
+scanner-produced command string, and a compound command may produce several:
+permission rules, saved approval patterns and best-effort directory inference
+apply to every extracted subcommand and `cd` target. A command the scanner
+cannot analyse fails when any shell deny rule applies to it and otherwise
+requires approval for the whole command, which keeps unanalysable input
+fail-closed. The offline validator mirrors this model by splitting its samples
+on the top-level separators `&&`, `||`, `;`, `|` and newlines and resolving
+each subcommand; separators inside quoted wrapper arguments do not split.
+
 - **Git and GitHub by default.** `git *`, `gh *`, `rtk git *` and `rtk gh *` are
   denied first. Read-only inspection (status, diff, log, show, rev-parse,
   ls-files, blame, grep, describe, shortlog, merge-base, and the read-only `gh`
@@ -56,14 +68,19 @@ reads in that order: deny → allow → ask → deny.
   request is reserved for the human user. Direct pushes to `main` —
   `git push <remote> main`, `git push <remote> HEAD:main` and
   `git push <remote> HEAD:refs/heads/main`, plus their RTK forms — are denied
-  even for the Git Manager.
-- **Defence in depth for hidden writes.** Compound commands such as
-  `echo ok && git push origin main` or `rtk test "jactionlint && git push
-  origin main"` resolve to `deny` because `*git push *`, `*git commit *`,
-  `*git add *`, `*git merge *`, `*git rebase *`, `*git reset *`,
-  `*gh pr create*`, `*gh pr merge*` and `*gh api *` are denied wherever they
-  appear in a command string, and the narrow quality-tool allows sit before
-  those denials.
+  even for the Git Manager. Because the shell scanner evaluates every
+  extracted subcommand, these protected operations deny in direct and
+  compound invocations: `git fetch origin && gh pr merge 1` denies on the
+  second subcommand even though the first is a legitimate Git Manager
+  operation.
+- **Defence in depth for hidden writes.** `*git add *`, `*git commit *`,
+  `*git push *`, `*git merge *`, `*git rebase *`, `*git reset *`,
+  `*gh pr create*`, `*gh pr merge*` and `*gh api *` are denied in every
+  scanner-produced command string, so writes cannot hide behind a wrapper or
+  inside a quoted argument such as `rtk test "jactionlint && git push origin
+  main"`, whose quoted payload stays one command string and matches the deny.
+  The narrow quality-tool allows sit before those denials, so a compound that
+  also contains a write still resolves to deny.
 - **RTK mirroring.** RTK condenses output but can also hide the executed
   command. `rtk git`/`rtk gh` mirror the plain rules one-to-one; the RTK file
   and report tools (`rtk read`, `rtk smart`, `rtk grep`, `rtk rg`,
@@ -92,8 +109,9 @@ reads in that order: deny → allow → ask → deny.
   for approval before anything outside the worktree is touched and then denies
   the credential locations, so paths outside the worktree always require
   approval. Every `*.env` and `*.env.*` file is denied for read and edit except
-  the committed `*.env.example`. `~/.config/opencode/*` stays local and is
-  readable and editable on approval only.
+  an `.env.example` or `*.env.example` template, if present.
+  `~/.config/opencode/*` stays local and is readable, editable and reachable
+  from shell command arguments on approval only.
 - **Scratch convention.** Paths outside the worktree require approval, so
   scratch copies and mutation tests belong under `.tmp/` inside the worktree
   and must be removed afterwards; `.tmp/` is listed in `.gitignore`.
@@ -101,9 +119,13 @@ reads in that order: deny → allow → ask → deny.
 The offline validator in `tools/workflow_check.py` resolves the full combined
 rule set for every agent with last-match-wins semantics and asserts these
 effects, including the deny rules that must stay last in the Git Manager
-frontmatter. `.opencode/agents/*.md` must contain exactly the six workflow
-agents, each with a `mode`, no `action: "*"` allow rule and — outside the Git
-Manager — no allow rule for any action other than `edit` and `subagent`.
+frontmatter. For compound samples it splits the command on the top-level
+separators `&&`, `||`, `;`, `|` and newlines, resolves each subcommand and
+combines the results as any deny → deny, else any ask → ask, best-effort
+mirroring the scanner model above. `.opencode/agents/*.md` must contain exactly
+the six workflow agents, each with a `mode`, no `action: "*"` allow rule and —
+outside the Git Manager — no allow rule for any action other than `edit` and
+`subagent`.
 
 ## Configuration layout and discovery
 

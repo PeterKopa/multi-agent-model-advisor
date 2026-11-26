@@ -3,6 +3,7 @@ ADR baseline (merged, accepted): ['ADR-0001']
 ADR proposal: ADR-0002 declared=Accepted effective=Proposed
 ADR escalation: ADR-0002 conflicts with ADR-0001
 PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+PASS adr in-memory fixtures: body-signature stability, unknown references, identifier collisions, non-accepted conflicts and open pull-request status mapping are enforced
 PASS permissions fixtures: over-broad allow rules are rejected and compliant agent rules pass
 Acceptance-criteria ledger:
 Criterion  Status         Gaps                                   Delegated to

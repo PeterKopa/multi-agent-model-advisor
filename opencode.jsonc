@@ -157,8 +157,8 @@
     //    credential location; read and edit deny the same paths; shell command
     //    strings get leading-wildcard mirrors so the same locations cannot be
     //    reached through command arguments. The personal OpenCode
-    //    configuration stays local and is not hard-forbidden: read, edit and
-    //    external access are on approval only.
+    //    configuration stays local and is not hard-forbidden: read, edit,
+    //    external access and shell command arguments are on approval only.
     { "action": "external_directory", "resource": "*", "effect": "ask" },
     { "action": "external_directory", "resource": "~/.ssh/*", "effect": "deny" },
     { "action": "external_directory", "resource": "~/.aws/*", "effect": "deny" },
@@ -210,7 +210,8 @@
     { "action": "edit", "resource": "~/.config/opencode/*", "effect": "ask" },
 
     // Environment files carry credentials on disk. Deny reads and edits of
-    // every *.env and *.env.* path, then re-enable the committed example.
+    // every *.env and *.env.* path, then re-enable an `.env.example` or
+    // `*.env.example` template, if present.
     { "action": "read", "resource": "*.env", "effect": "deny" },
     { "action": "read", "resource": "*.env.*", "effect": "deny" },
     { "action": "edit", "resource": "*.env", "effect": "deny" },
@@ -219,7 +220,9 @@
     { "action": "edit", "resource": "*.env.example", "effect": "allow" },
 
     // Shell mirrors of the credential denials above, so command strings such
-    // as "cat ~/.ssh/id_rsa" cannot bypass the file tools.
+    // as "cat ~/.ssh/id_rsa" cannot bypass the file tools. The last mirror is
+    // the personal OpenCode configuration: it asks, never denies, because the
+    // owner requires that location to stay approval-only.
     { "action": "shell", "resource": "*/.ssh/*", "effect": "deny" },
     { "action": "shell", "resource": "*/.aws/*", "effect": "deny" },
     { "action": "shell", "resource": "*/.gnupg/*", "effect": "deny" },
@@ -236,10 +239,12 @@
     { "action": "shell", "resource": "*Library/Keychains/*", "effect": "deny" },
     { "action": "shell", "resource": "*.env*", "effect": "deny" },
     { "action": "shell", "resource": "*.env.example", "effect": "allow" },
+    { "action": "shell", "resource": "*/.config/opencode/*", "effect": "ask" },
 
     // i) Defence in depth: write commands hidden inside wrapper or compound
-    //    commands are denied wherever they appear. The Git Manager's later
-    //    allow rules still win for direct commands; the validator proves both.
+    //    commands are denied in every scanner-produced command string. The
+    //    Git Manager's later allow rules still win for direct commands; the
+    //    validator proves both.
     { "action": "shell", "resource": "*git add *", "effect": "deny" },
     { "action": "shell", "resource": "*git commit *", "effect": "deny" },
     { "action": "shell", "resource": "*git push *", "effect": "deny" },

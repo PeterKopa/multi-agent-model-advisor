@@ -72,9 +72,14 @@ therefore appear as proposals even when their frontmatter declares `Accepted`.
   covers the read-only commands and their RTK mirrors, the Go quality tools and
   their filtered runs, the ask rules, the credential-path denials in file and
   shell form, the compound/hidden-write denials, the push-to-main denials and
-  the Git Manager's write commands including `git push` to a feature branch. It
-  rejects broad allow rules and allow rules added after a deny, rather than
-  only looking for permission strings.
+  the Git Manager's write commands including `git push` to a feature branch.
+  Compound samples are split on the top-level separators `&&`, `||`, `;`, `|`
+  and newlines and each subcommand is resolved on its own — any deny denies
+  the sample, otherwise any ask asks — mirroring OpenCode's scanner-based
+  shell permission model (see
+  [`opencode-v2.4.1-discovery.md`](opencode-v2.4.1-discovery.md)). It rejects
+  broad allow rules and allow rules added after a deny, rather than only
+  looking for permission strings.
 - `AGENTS.md` points to the feedback contract, documents the ADR baseline, the
   credential rules, the `.tmp/` scratch convention and the RTK usage rules.
 - The feedback contract contains every required report field.
@@ -102,6 +107,15 @@ of any status plus open proposals), rejects a proposal identifier that collides
 with a merged ADR that is not accepted, and rejects conflicts that reference a
 merged ADR that is not accepted. The signature that detects an unchanged ADR on
 the default branch includes a SHA-256 of the record body.
+
+An additional in-memory ADR fixture builds records in code (no repository
+files) and asserts the same guarantees: the signature stays stable for an
+unchanged body and changes when the body changes, an unknown `superseded-by`
+reference is rejected, an open-pull-request identifier collision with a merged
+non-accepted ADR is rejected, a conflict against a merged non-accepted ADR
+raises the non-accepted-conflict error, and declared `Accepted`, `Rejected`
+and `Superseded` statuses in an open pull request map to an effective
+`Proposed` while `In Review` stays `In Review`.
 
 ### Feedback reconciliation
 

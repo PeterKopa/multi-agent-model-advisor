@@ -52,7 +52,7 @@ The permission policy implements four standing rules:
   (`rtk test *govulncheck*`, `rtk test *golangci-lint*`,
   `rtk test *jactionlint*`), while `rtk bypass` and `rtk proxy` ask. Nested
   write commands (`*git add *`, `*git commit *`, `*git push *`, `*gh pr
-  create*`, `*gh api *`, and similar) are denied wherever they appear in a
+  create*`, `*gh api *`, and similar) are denied in every scanner-produced
   command string, so wrappers and compound commands cannot smuggle writes past
   the role boundaries.
 - **Credential-path denials.** Credential stores and secret files — including
@@ -61,8 +61,9 @@ The permission policy implements four standing rules:
   `~/.pypirc`, the OpenCode authentication database and logs, and
   `~/Library/Keychains/` — are denied for `read`, `edit` and
   `external_directory`, and the same locations are denied inside shell command
-  strings. Every `*.env` file is denied except the committed `.env.example`;
-  `~/.config/opencode/*` stays local and is used on approval only.
+  strings. Every `*.env` file is denied except an `.env.example` or
+  `*.env.example` template, if present; `~/.config/opencode/*` stays local and
+  is used on approval only, also from shell command arguments.
 - **External-path approval.** The `external_directory` gate asks for approval
   before anything outside the worktree is accessed, and RTK commands that
   reference home or parent-directory paths ask as well. Scratch work therefore
@@ -99,22 +100,28 @@ provider configuration out of version control.
 
 The following residuals of the permission model were reviewed and are accepted:
 
-- **Git Manager compound commands.** Because agent rules are appended after the
-  project rules and the last matching rule wins, a compound shell command that
-  starts with a Git verb the Git Manager may run stays allowed for that agent.
-  Protected operations still resolve to `deny` at the end of the rule chain:
-  `gh api`, pull-request merges, and pushes to `main` or `refs/heads/main`.
-  The risk is accepted; the alternative would be to deny all compound
-  commands, which would remove legitimate chained Git operations.
+- **Shell scanner and compound commands.** OpenCode evaluates shell
+  permission checks on scanner-produced command strings across Bash, Zsh,
+  POSIX sh and PowerShell, and rules apply to every extracted subcommand and
+  `cd` target (see the "Scanner" section of the official permissions page,
+  <https://opencode.ai/docs/permissions>). Protected operations — `gh api`,
+  pull-request merges and pushes to `main` — are therefore denied in direct
+  and compound invocations: the matching subcommand resolves to the standing
+  deny even when a preceding subcommand is a legitimate Git Manager operation.
+  The offline validator approximates the scanner best-effort by splitting
+  samples on the common top-level separators (`&&`, `||`, `;`, `|` and
+  newlines) and resolving each subcommand; quoted wrapper arguments stay one
+  subcommand, and exotic constructs rely on the scanner's fail-closed
+  behaviour for commands it cannot analyse.
 - **Plain shell paths outside the worktree.** A general path rule for non-RTK
   shell commands is intentionally not part of the policy, because absolute
   paths inside the worktree also resolve under the home directory and a broad
   rule would ask on every routine command. Credential locations remain denied,
   and RTK commands plus the read/edit file tools require approval outside the
   worktree. The risk is accepted and documented.
-- **Minor friction.** The `rtk * ~*` approval rule also fires on tilde
-  revisions such as `rtk git show HEAD~1`; this is an approval prompt, not a
-  silent allow, and is accepted.
+- **Minor friction.** The `rtk * ~*` approval rule also fires when an RTK
+  command carries a home-path argument, for example `rtk read ~/x`; this is an
+  approval prompt, not a silent allow, and is accepted.
 
 # Alternatives considered
 

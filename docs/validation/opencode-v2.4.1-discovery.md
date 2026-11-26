@@ -111,6 +111,36 @@ rule, while a push to `main` stays denied even for the Git Manager. A broad
 agent-level allow rule would override the project restrictions, so the
 validator rejects one.
 
+## Shell scanner semantics
+
+The official OpenCode permissions page describes shell permission checks with
+a built-in shell scanner across Bash, Zsh, POSIX sh and PowerShell
+(<https://opencode.ai/docs/permissions>, section "Scanner"). Key statements
+affecting this workflow:
+
+- the `shell` permission resource is the scanner-produced command string, and
+  a compound command may produce several;
+- permission rules, saved approval patterns and best-effort directory
+  inference apply to every extracted subcommand and `cd` target;
+- for commands the scanner cannot analyse, a shell deny that applies makes the
+  command fail; otherwise the whole command asks.
+
+Consequence for this policy: a protected operation — `gh api`, a pull-request
+merge or a push to `main` — is denied in direct and compound invocations even
+for the Git Manager, because the matching subcommand resolves to the standing
+deny while the preceding subcommand is evaluated separately. A chained
+operation such as `git add . && git push origin HEAD` stays allowed because
+every extracted subcommand resolves to allow.
+
+`opencode debug agents` exposes the resolved rules, not the runtime matching:
+the scanner runs inside OpenCode when a command executes. The offline
+validator therefore approximates the scanner best-effort by splitting its
+compound samples on the top-level separators `&&`, `||`, `;`, `|` and
+newlines and resolving each subcommand with last-match-wins semantics
+(quoted wrapper arguments stay one command string). Recorded expectations
+such as `git fetch origin && gh pr merge 1` → `deny` follow this model, and
+exotic constructs rely on the scanner's fail-closed behaviour.
+
 ## Shared instruction loading
 
 - `AGENTS.md` was loaded automatically as the repository instruction file.
