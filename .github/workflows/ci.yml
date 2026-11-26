@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build and test (offline)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Everything after the single module download step runs fully offline.
+      GOTOOLCHAIN: local
+      GOPROXY: off
+      GOSUMDB: off
+      GOFLAGS: -mod=readonly
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.27.4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.4'
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Download Go modules (build-time setup; the only network-dependent project step)
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+          GOSUMDB: sum.golang.org
+        run: go mod download
+
+      - name: Verify module integrity
+        run: go mod verify
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt reported unformatted files:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+      - name: Check module tidiness
+        run: go mod tidy -diff
+
+      - name: Fail on uncommitted generated changes
+        run: git diff --exit-code
+
+      - name: Build offline binary with CI-test version
+        run: |
+          go build -trimpath \
+            -ldflags "-X github.com/PeterKopa/multi-agent-model-advisor/internal/app.version=ci-test" \
+            -o "$RUNNER_TEMP/multi-agent-model-advisor" \
+            ./cmd/multi-agent-model-advisor
+
+      - name: Assert --version output
+        run: |
+          version_out="$("$RUNNER_TEMP/multi-agent-model-advisor" --version)"
+          expected="multi-agent-model-advisor ci-test"
+          echo "--version output: $version_out"
+          if [ "$version_out" != "$expected" ]; then
+            echo "unexpected --version output, expected: $expected" >&2
+            exit 1
+          fi
+
+      - name: Assert --help output
+        run: |
+          if ! "$RUNNER_TEMP/multi-agent-model-advisor" --help | grep -qF 'Press q or Ctrl+C to quit.'; then
+            echo "--help is missing the documented quit instruction" >&2
+            exit 1
+          fi
