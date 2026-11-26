@@ -29,11 +29,81 @@ and is scoped to the development workflow and its supporting documentation.
 
 The Orchestrator is the only agent that launches subagents. The Reviewer and
 Tester work independently of the Implementer. Project-level permission rules in
-`opencode.jsonc` deny Git and GitHub commands by default, re-enable read-only
-inspection, and reserve write operations for the Git Manager, which appends its
-own allow rules in `.opencode/agents/git-manager.md`. Technical restrictions are
-enforced with permissions; the agent instructions describe the positive
-responsibility of each role.
+`opencode.jsonc` implement the permission model below; the agent instructions
+describe the positive responsibility of each role.
+
+## Permission model
+
+OpenCode resolves permissions as ordered `{action, resource, effect}` rules and
+the **last matching rule wins**. Agent rules from `.opencode/agents/*.md` are
+appended after the project rules from `opencode.jsonc`, so an agent can refine
+the project policy for its own role and a later project denial can only be
+overturned by a later agent allow. Effects are `deny` (blocked without
+approval), `ask` (the operator must approve) and `allow`. The project policy
+reads in that order: deny → allow → ask → deny.
+
+- **Git and GitHub by default.** `git *`, `gh *`, `rtk git *` and `rtk gh *` are
+  denied first. Read-only inspection (status, diff, log, show, rev-parse,
+  ls-files, blame, grep, describe, shortlog, merge-base, and the read-only `gh`
+  subcommands) is re-enabled in both plain and RTK form. The Git Manager
+  appends allow rules for the write commands it owns — including the RTK
+  mirrors `rtk git add/branch/checkout/commit/push/switch` and
+  `rtk gh pr create` — and repeats the protected denials **after** its allows so
+  they win for that agent. Destructive git allows (reset, clean, rebase,
+  merge, tag, submodule) are deliberately not mirrored to RTK.
+- **Human-only merge enforcement.** `gh api*` and `gh pr merge*` are denied
+  project-wide and again as the Git Manager's last rules; merging a pull
+  request is reserved for the human user. Direct pushes to `main` —
+  `git push <remote> main`, `git push <remote> HEAD:main` and
+  `git push <remote> HEAD:refs/heads/main`, plus their RTK forms — are denied
+  even for the Git Manager.
+- **Defence in depth for hidden writes.** Compound commands such as
+  `echo ok && git push origin main` or `rtk test "jactionlint && git push
+  origin main"` resolve to `deny` because `*git push *`, `*git commit *`,
+  `*git add *`, `*git merge *`, `*git rebase *`, `*git reset *`,
+  `*gh pr create*`, `*gh pr merge*` and `*gh api *` are denied wherever they
+  appear in a command string, and the narrow quality-tool allows sit before
+  those denials.
+- **RTK mirroring.** RTK condenses output but can also hide the executed
+  command. `rtk git`/`rtk gh` mirror the plain rules one-to-one; the RTK file
+  and report tools (`rtk read`, `rtk smart`, `rtk grep`, `rtk rg`,
+  `rtk ast-grep`, `rtk find`, `rtk ls`, `rtk tree`, `rtk wc`, `rtk diff`,
+  `rtk log`, `rtk json`, `rtk deps`, `rtk gain`, `rtk methods`) are allowed.
+  `rtk test`, `rtk err` and `rtk summary` execute hidden commands and are
+  denied, except the three narrow Go quality-tool filters
+  (`rtk test *govulncheck*`, `rtk test *golangci-lint*`,
+  `rtk test *jactionlint*`); `rtk bypass` and `rtk proxy` ask.
+- **Go quality toolchain.** `go`, `govulncheck`, `golangci-lint` and
+  `jactionlint` are allowed directly so quality checks run without approval.
+  Filtered runs are allowed only through the narrow `rtk test` patterns above;
+  every other `rtk test` invocation stays denied, and a compound command that
+  also contains a write still resolves to deny.
+- **Ask rules.** Infrastructure, cluster, cloud, database and network tools
+  (`docker`, `kubectl`, `oc`, `aws`, `psql`, `wget`, and their RTK mirrors) ask
+  for approval. Toolchains the project does not use (`pnpm`, `dotnet`, and
+  their RTK mirrors) are denied.
+- **Path policy.** Credential and secret locations — `~/.ssh/`, `~/.aws/`,
+  `~/.gnupg/`, `~/.config/gh/`, `~/.kube/`, `~/.docker/config.json`, `~/.netrc`,
+  `~/.git-credentials`, `~/.npmrc`, `~/.pypirc`,
+  `~/.local/share/opencode/auth.json`, the OpenCode database and logs, and
+  `~/Library/Keychains/` — are denied for `read`, `edit` and
+  `external_directory`, and the same locations are denied inside shell command
+  strings through leading-wildcard mirrors. The `external_directory` gate asks
+  for approval before anything outside the worktree is touched and then denies
+  the credential locations, so paths outside the worktree always require
+  approval. Every `*.env` and `*.env.*` file is denied for read and edit except
+  the committed `*.env.example`. `~/.config/opencode/*` stays local and is
+  readable and editable on approval only.
+- **Scratch convention.** Paths outside the worktree require approval, so
+  scratch copies and mutation tests belong under `.tmp/` inside the worktree
+  and must be removed afterwards; `.tmp/` is listed in `.gitignore`.
+
+The offline validator in `tools/workflow_check.py` resolves the full combined
+rule set for every agent with last-match-wins semantics and asserts these
+effects, including the deny rules that must stay last in the Git Manager
+frontmatter. `.opencode/agents/*.md` must contain exactly the six workflow
+agents, each with a `mode`, no `action: "*"` allow rule and — outside the Git
+Manager — no allow rule for any action other than `edit` and `subagent`.
 
 ## Configuration layout and discovery
 

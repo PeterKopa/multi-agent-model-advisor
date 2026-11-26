@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """Offline validation for the Multi-Agent Model Advisor development workflow.
 
-The validator checks three things without network access or credentials:
+The validator checks four things without network access or credentials:
 
-1. the project agent configuration and its permission boundaries;
-2. ADR baseline handling when an open pull request declares an ADR accepted;
+1. the project agent configuration and its permission boundaries, including
+   the RTK mirror policy, the Go quality-toolchain allows, the credential-path
+   denials, the ask rules for infrastructure tools and paths outside the
+   worktree, and the human-only merge enforcement;
+2. ADR baseline handling when an open pull request declares an ADR accepted,
+   including reference and identifier validation for the ADR links;
 3. feedback reconciliation with synthetic reports, including an omitted
-   criterion, an unverified criterion and a proposed ADR conflict.
+   criterion, an unverified criterion and a proposed ADR conflict, asserted
+   against the exact expected gap and escalation sets;
+4. permission fixtures that reject over-broad agent allow rules.
 """
 
 from __future__ import annotations
 
 import argparse
 import fnmatch
+import hashlib
 import json
 import re
 import subprocess
@@ -34,6 +41,11 @@ REQUIRED_AGENTS = {
     "git-manager": "subagent",
 }
 
+# Agents other than the Git Manager may only allow the edit and subagent
+# actions; shell, webfetch, websearch and read allows are reserved for the Git
+# Manager's write role or belong at the project level.
+NON_GIT_MANAGER_ALLOW_ACTIONS = {"edit", "subagent"}
+
 REPORT_FIELDS = [
     "agent",
     "issue",
@@ -52,6 +64,219 @@ REPORT_FIELDS = [
 
 REPORT_STATUSES = {"Completed", "Partial", "Blocked", "Needs Decision"}
 COVERAGE_VALUES = {"covered", "partial", "unverified", "missing", "not_applicable"}
+
+# Read-only Git and GitHub commands that must stay allowed in plain and RTK
+# form for every agent.
+GIT_READ_COMMANDS = [
+    "status",
+    "diff",
+    "log",
+    "show",
+    "rev-parse",
+    "ls-files",
+    "blame",
+    "grep",
+    "describe",
+    "shortlog",
+    "merge-base",
+]
+GH_READ_COMMANDS = [
+    "pr view",
+    "pr diff",
+    "pr checks",
+    "pr list",
+    "issue view",
+    "issue list",
+    "run view",
+    "run list",
+    "workflow view",
+    "workflow list",
+    "repo view",
+    "release view",
+    "release list",
+]
+RTK_REPORT_TOOLS = [
+    "read",
+    "smart",
+    "grep",
+    "rg",
+    "ast-grep",
+    "find",
+    "ls",
+    "tree",
+    "wc",
+    "diff",
+    "log",
+    "json",
+    "deps",
+    "gain",
+    "methods",
+]
+
+# Go quality toolchain and the filtered RTK runs of the same tools.
+GO_QUALITY_SAMPLES = [
+    "go test ./...",
+    "govulncheck ./...",
+    "golangci-lint run ./...",
+    "jactionlint",
+]
+RTK_FILTERED_QUALITY_SAMPLES = [
+    "rtk test govulncheck ./...",
+    "rtk test golangci-lint run ./...",
+    "rtk test jactionlint",
+]
+
+INFRA_ASK_SAMPLES = [
+    "docker ps",
+    "kubectl get pods",
+    "oc get pods",
+    "aws s3 ls",
+    "psql -l",
+    "wget https://example.com",
+]
+INFRA_ASK_RTK_SAMPLES = [f"rtk {command}" for command in INFRA_ASK_SAMPLES]
+
+# Outside-worktree RTK reads require approval. A generic "rtk * /*" ask rule is
+# deliberately absent.
+OUTSIDE_WORKTREE_ASK_SAMPLES = [
+    "rtk read ~/x",
+    "rtk read /Users/x",
+    "rtk read ../x",
+]
+
+# Credential, secret and env locations. Read, edit and external_directory deny
+# the home-relative paths; shell command strings are blocked through the
+# leading-wildcard mirrors in the project policy.
+SENSITIVE_PATH_SAMPLES = [
+    "~/.ssh/id_rsa",
+    "~/.aws/credentials",
+    "~/.gnupg/secring.gpg",
+    "~/.config/gh/hosts.yml",
+    "~/.kube/config",
+    "~/.docker/config.json",
+    "~/.netrc",
+    "~/.git-credentials",
+    "~/.npmrc",
+    "~/.pypirc",
+    "~/.local/share/opencode/auth.json",
+    "~/.local/share/opencode/opencode.db",
+    "~/.local/share/opencode/log/session.log",
+    "~/Library/Keychains/login.keychain-db",
+]
+SENSITIVE_SHELL_SAMPLES = [
+    "cat ~/.ssh/id_rsa",
+    "rtk read ~/.ssh/id_rsa",
+    "cp ~/.aws/credentials x",
+    "git add ~/.ssh/id_rsa",
+    "cat ~/.config/gh/hosts.yml",
+    "cat ~/.kube/config",
+    "cat ~/.docker/config.json",
+    "cat ~/.netrc",
+    "cat ~/.git-credentials",
+    "cp ~/.npmrc x",
+    "cp ~/.pypirc x",
+    "cat ~/.netrc | head",
+    "cat ~/.local/share/opencode/auth.json",
+    "cat ~/.local/share/opencode/opencode.db",
+    "cat ~/.local/share/opencode/log/session.log",
+    "cp ~/Library/Keychains/login.keychain-db x",
+    "cat .env",
+    "cat config/.env.local",
+]
+ENV_ALLOW_SHELL_SAMPLES = ["cat .env.example", "cat config/.env.example"]
+
+TOOLCHAIN_DENY_SAMPLES = ["pnpm install", "rtk pnpm install", "dotnet build", "rtk dotnet build"]
+WRAPPER_DENY_SAMPLES = ["rtk test pytest", "rtk err ls", "rtk summary ls"]
+WRAPPER_ASK_SAMPLES = ["rtk bypass ls", "rtk proxy ls"]
+
+# Compound commands that hide a write must resolve to deny for every agent,
+# including the narrow Go quality-tool rkt test filters.
+NESTED_WRITE_DENY_SAMPLES = [
+    'rtk test "govulncheck ./...; git push origin main"',
+    'rtk test "golangci-lint run ./... ; git commit -m x"',
+    'rtk test "jactionlint && git push origin main"',
+    "echo ok && git push origin main",
+    "echo ok && gh api repos/x/y",
+    "sh -c 'git commit -m test'",
+]
+
+# gh api and pull-request merges are denied for every agent; merging a pull
+# request is reserved for the human user.
+GH_API_DENY_SAMPLES = [
+    "gh api",
+    "gh api repos/x/y",
+    "gh api -X PUT repos/o/r/pulls/1/merge",
+    "gh api graphql -f query=query{viewer{login}}",
+    "rtk gh api repos/x/y",
+    "gh pr merge 1 --merge",
+    "gh pr merge 1",
+    "rtk gh pr merge 1",
+    "gh workflow run test.yml",
+]
+
+# Direct pushes to main are denied even for the Git Manager.
+PUSH_TO_MAIN_DENY_SAMPLES = [
+    "git push origin main",
+    "git push -u origin main",
+    "git push origin HEAD:main",
+    "git push origin HEAD:refs/heads/main",
+    "rtk git push origin main",
+    "rtk git push -u origin main",
+    "rtk git push origin HEAD:main",
+]
+
+# Write commands the Git Manager owns, in plain and RTK form. Other agents are
+# denied; pushes to main are handled by PUSH_TO_MAIN_DENY_SAMPLES above and are
+# therefore excluded here.
+GIT_MANAGER_WRITE_COMMANDS = [
+    "git add .",
+    "git commit -m test",
+    "git push origin HEAD",
+    "git push -u origin issue-30-multi-agent-development-workflow",
+    "git merge main",
+    "git rebase main",
+    "git checkout -b feature",
+    "git branch feature",
+    "git switch -c feature",
+    "gh pr create --title test",
+    "rtk git add .",
+    "rtk git branch feature",
+    "rtk git checkout -b feature",
+    "rtk git commit -m test",
+    "rtk git push origin issue-30-multi-agent-development-workflow",
+    "rtk git switch -c feature",
+    "rtk gh pr create --title test",
+]
+
+# Deny rules that must appear in the Git Manager frontmatter after every allow
+# rule, so they win under last-match-wins resolution.
+GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
+    "gh api*",
+    "gh pr merge*",
+    "rtk gh api*",
+    "rtk gh pr merge*",
+    "git push * main*",
+    "git push *:main*",
+    "git push *heads/main*",
+    "rtk git push * main*",
+    "rtk git push *:main*",
+    "rtk git push *heads/main*",
+    "*/.ssh/*",
+    "*/.aws/*",
+    "*/.gnupg/*",
+    "*/.config/gh/*",
+    "*/.kube/*",
+    "*/.docker/config.json*",
+    "*/.netrc*",
+    "*/.git-credentials*",
+    "*/.npmrc*",
+    "*/.pypirc*",
+    "*/.local/share/opencode/auth.json*",
+    "*/.local/share/opencode/opencode.db*",
+    "*/.local/share/opencode/log/*",
+    "*Library/Keychains/*",
+    "*.env*",
+]
 
 
 class CheckError(RuntimeError):
@@ -184,8 +409,9 @@ def read_markdown(path: Path) -> tuple[dict[str, Any], str]:
 
 
 def adr_from_text(text: str, path: str, source: str) -> dict[str, Any]:
-    frontmatter, _ = split_markdown(text)
+    frontmatter, body = split_markdown(text)
     adr = dict(frontmatter)
+    adr["body_sha256"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
     adr["path"] = path
     adr["source"] = source
     adr.setdefault("id", Path(path).stem.split("-")[0] + "-" + Path(path).stem.split("-")[1])
@@ -239,7 +465,10 @@ def effective_status(adr: dict[str, Any]) -> str:
 def evaluate_adrs(
     baseline: list[dict[str, Any]], open_pr: list[dict[str, Any]]
 ) -> tuple[set[str], list[dict[str, Any]], list[dict[str, str]]]:
-    baseline_ids = {adr["id"] for adr in baseline if adr["status"] == "Accepted"}
+    merged_by_id = {adr["id"]: adr for adr in baseline}
+    accepted_baseline_ids = {
+        adr_id for adr_id, adr in merged_by_id.items() if adr["status"] == "Accepted"
+    }
     proposals = [
         {
             "id": adr["id"],
@@ -250,27 +479,43 @@ def evaluate_adrs(
         }
         for adr in open_pr
     ]
+    proposal_ids = {proposal["id"] for proposal in proposals}
+    # References are validated against every known ADR: merged records of any
+    # status plus the open proposals. Only accepted merged records form the
+    # baseline used for conflict escalation.
+    known_ids = set(merged_by_id) | proposal_ids
+
     conflicts: list[dict[str, str]] = []
     for adr in open_pr:
+        references = list(adr.get("supersedes", [])) + list(
+            adr.get("conflicts-with", [])
+        )
+        superseded_by = adr.get("superseded-by")
+        if superseded_by is not None:
+            references.append(superseded_by)
+        for reference in references:
+            require(
+                reference in known_ids,
+                f"{adr['id']} references unknown ADR {reference}",
+            )
         for conflicting in adr.get("conflicts-with", []):
-            if conflicting in baseline_ids:
+            if conflicting in merged_by_id:
                 conflicts.append(
                     {
                         "proposal": str(adr["id"]),
                         "baseline": str(conflicting),
-                        "decision": "Open pull-request ADR conflicts with the accepted baseline",
+                        "decision": "Open pull-request ADR conflicts with a merged ADR",
                     }
                 )
-    proposal_ids = {proposal["id"] for proposal in proposals}
-    all_ids = baseline_ids | proposal_ids
+
     for adr in open_pr:
-        for reference in list(adr.get("supersedes", [])) + list(
-            adr.get("conflicts-with", [])
-        ):
-            require(
-                reference in all_ids,
-                f"{adr['id']} references unknown ADR {reference}",
+        merged = merged_by_id.get(adr["id"])
+        if merged is not None and merged["status"] != "Accepted":
+            raise CheckError(
+                f"proposal {adr['id']} collides with merged ADR {adr['id']} "
+                f"(status {merged['status']}); a new decision needs a new identifier"
             )
+
     for proposal in proposals:
         require(
             proposal["effective_status"] != "Accepted",
@@ -281,12 +526,13 @@ def evaluate_adrs(
                 proposal["effective_status"] == "Proposed",
                 f"{proposal['id']} declares Accepted and must be demoted to Proposed",
             )
+
     for conflict in conflicts:
         require(
-            conflict["baseline"] in baseline_ids,
-            f"conflict references a baseline ADR that is not accepted: {conflict['baseline']}",
+            conflict["baseline"] in accepted_baseline_ids,
+            f"conflict references a non-accepted ADR: {conflict['baseline']}",
         )
-    return baseline_ids, proposals, conflicts
+    return accepted_baseline_ids, proposals, conflicts
 
 
 def parse_permissions(path: Path) -> list[dict[str, Any]]:
@@ -346,6 +592,170 @@ def effective_effect(
     return effect
 
 
+def reject_dangerous_rules(scope: str, rules: list[dict[str, Any]]) -> None:
+    """Reject any action-'*' rule whose effect would allow commands."""
+    for rule in rules:
+        if rule.get("action") == "*" and rule.get("effect", "allow") == "allow":
+            raise CheckError(
+                f"{scope}: an action '*' rule with effect 'allow' for resource "
+                f"{rule.get('resource')!r} would override every project restriction"
+            )
+
+
+def check_agent_rules(agent: str, mode: Any, rules: list[dict[str, Any]]) -> None:
+    """Validate one agent's own permission rules against the role policy."""
+    require(mode is not None, f"{agent}: agent file must declare a mode")
+    require(
+        mode == REQUIRED_AGENTS.get(agent),
+        f"{agent}: expected mode {REQUIRED_AGENTS.get(agent)!r}, got {mode!r}",
+    )
+    for rule in rules:
+        if rule.get("action") == "*" and rule.get("effect", "allow") == "allow":
+            raise CheckError(
+                f"{agent}: a broad allow rule (action '*') for resource "
+                f"{rule.get('resource')!r} would override the project "
+                "write restrictions"
+            )
+    if agent != "git-manager":
+        for rule in rules:
+            if rule.get("effect", "allow") == "allow" and str(
+                rule.get("action", "")
+            ) not in NON_GIT_MANAGER_ALLOW_ACTIONS:
+                raise CheckError(
+                    f"{agent}: allow rules for action {rule.get('action')!r} are "
+                    "reserved for the Git Manager; use deny or ask instead"
+                )
+
+
+def policy_expectations(agent: str) -> list[tuple[str, str, str]]:
+    """Samples every agent must resolve to, under last-match-wins semantics."""
+    expectations: list[tuple[str, str, str]] = []
+    add = expectations.append
+
+    for command in GIT_READ_COMMANDS:
+        add(("shell", f"git {command}", "allow"))
+        add(("shell", f"rtk git {command}", "allow"))
+    for command in GH_READ_COMMANDS:
+        add(("shell", f"gh {command}", "allow"))
+        add(("shell", f"rtk gh {command}", "allow"))
+    for tool in RTK_REPORT_TOOLS:
+        add(("shell", f"rtk {tool}", "allow"))
+    add(("shell", "rtk read src/x.ts", "allow"))
+    add(("shell", "rtk tree src", "allow"))
+    for command in GO_QUALITY_SAMPLES + RTK_FILTERED_QUALITY_SAMPLES:
+        add(("shell", command, "allow"))
+
+    for command in (
+        INFRA_ASK_SAMPLES
+        + INFRA_ASK_RTK_SAMPLES
+        + WRAPPER_ASK_SAMPLES
+        + OUTSIDE_WORKTREE_ASK_SAMPLES
+    ):
+        add(("shell", command, "ask"))
+
+    for command in (
+        SENSITIVE_SHELL_SAMPLES
+        + PUSH_TO_MAIN_DENY_SAMPLES
+        + GH_API_DENY_SAMPLES
+        + NESTED_WRITE_DENY_SAMPLES
+        + TOOLCHAIN_DENY_SAMPLES
+        + WRAPPER_DENY_SAMPLES
+    ):
+        add(("shell", command, "deny"))
+
+    for path in SENSITIVE_PATH_SAMPLES:
+        add(("read", path, "deny"))
+        add(("edit", path, "deny"))
+        add(("external_directory", path, "deny"))
+    add(("external_directory", "~/Library/Fonts/Test.ttf", "deny"))
+    add(("external_directory", "/tmp/outside.md", "ask"))
+    add(("read", "~/.config/opencode/opencode.json", "ask"))
+    add(("external_directory", "~/.config/opencode/opencode.json", "ask"))
+    for path in (".env", "src/.env", "config/.env.local"):
+        add(("read", path, "deny"))
+        add(("edit", path, "deny"))
+    for path in (".env.example", "config/.env.example"):
+        add(("read", path, "allow"))
+
+    # Edit access to .env.example and the personal OpenCode configuration is
+    # decided by the project ask rules only for agents without a blanket edit
+    # deny. The Orchestrator, Planner, Reviewer, Tester and Git Manager deny
+    # edits themselves; that role boundary wins under last-match-wins.
+    blanket_edit_deny = agent != "implementer"
+    for path in (".env.example", "config/.env.example"):
+        add(("edit", path, "deny" if blanket_edit_deny else "allow"))
+    add(
+        (
+            "edit",
+            "~/.config/opencode/opencode.json",
+            "deny" if blanket_edit_deny else "ask",
+        )
+    )
+
+    wanted = "allow" if agent == "git-manager" else "deny"
+    for command in GIT_MANAGER_WRITE_COMMANDS:
+        add(("shell", command, wanted))
+    return expectations
+
+
+def check_project_rules(rules: list[dict[str, Any]]) -> None:
+    """Validate the project-wide policy in opencode.jsonc on its own."""
+    def expect(action: str, value: str, wanted: str) -> None:
+        actual = effective_effect(rules, action, value)
+        require(
+            actual == wanted,
+            f"project permissions: {action} {value!r} resolves to "
+            f"{actual}, expected {wanted}",
+        )
+
+    for command in GIT_READ_COMMANDS:
+        expect("shell", f"git {command}", "allow")
+        expect("shell", f"rtk git {command}", "allow")
+    for command in GH_READ_COMMANDS:
+        expect("shell", f"gh {command}", "allow")
+        expect("shell", f"rtk gh {command}", "allow")
+    for tool in RTK_REPORT_TOOLS:
+        expect("shell", f"rtk {tool}", "allow")
+    for command in GO_QUALITY_SAMPLES + RTK_FILTERED_QUALITY_SAMPLES:
+        expect("shell", command, "allow")
+
+    for command in (
+        ["git add .", "git commit -m test", "git push origin HEAD"]
+        + PUSH_TO_MAIN_DENY_SAMPLES
+        + ["git merge main", "git rebase main", "git reset --hard HEAD", "git filter-branch --force"]
+        + ["gh pr create --title test", "rtk git add .", "rtk git commit -m test", "rtk gh pr create --title test"]
+        + GH_API_DENY_SAMPLES
+        + NESTED_WRITE_DENY_SAMPLES
+        + TOOLCHAIN_DENY_SAMPLES
+        + WRAPPER_DENY_SAMPLES
+    ):
+        expect("shell", command, "deny")
+
+    for command in (
+        INFRA_ASK_SAMPLES
+        + INFRA_ASK_RTK_SAMPLES
+        + WRAPPER_ASK_SAMPLES
+        + OUTSIDE_WORKTREE_ASK_SAMPLES
+    ):
+        expect("shell", command, "ask")
+
+    for path in SENSITIVE_PATH_SAMPLES:
+        expect("read", path, "deny")
+        expect("edit", path, "deny")
+        expect("external_directory", path, "deny")
+    expect("external_directory", "~/Library/Fonts/Test.ttf", "deny")
+    expect("external_directory", "/tmp/outside.md", "ask")
+    expect("read", "~/.config/opencode/opencode.json", "ask")
+    expect("edit", "~/.config/opencode/opencode.json", "ask")
+    expect("external_directory", "~/.config/opencode/opencode.json", "ask")
+    for path in (".env", "src/.env", "config/.env.local"):
+        expect("read", path, "deny")
+        expect("edit", path, "deny")
+    for path in (".env.example", "config/.env.example"):
+        expect("read", path, "allow")
+        expect("edit", path, "allow")
+
+
 def check_config() -> None:
     config = load_jsonc(ROOT / "opencode.jsonc")
     require(config.get("default_agent") == "orchestrator", "default_agent must be orchestrator")
@@ -356,94 +766,37 @@ def check_config() -> None:
     )
 
     global_rules = config.get("permissions", [])
-    require(
-        effective_effect(global_rules, "shell", "git status --short") == "allow",
-        "project permissions must allow read-only git inspection",
-    )
-    for command in [
-        "git add .",
-        "git commit -m test",
-        "git push origin HEAD",
-        "git filter-branch --force",
-        "gh pr create --title test",
-        "gh pr merge 1 --merge",
-        "gh workflow run test.yml",
-        "gh api repos/x/y",
-    ]:
-        require(
-            effective_effect(global_rules, "shell", command) == "deny",
-            f"project permissions must deny {command!r}",
-        )
+    reject_dangerous_rules("project permissions", global_rules)
+    check_project_rules(global_rules)
 
     files = sorted(AGENTS_DIR.glob("*.md"))
     found = {path.stem for path in files}
     require(
-        set(REQUIRED_AGENTS) <= found,
-        f"required agent files are missing: {sorted(set(REQUIRED_AGENTS) - found)}",
+        found == set(REQUIRED_AGENTS),
+        f".opencode/agents must contain exactly {sorted(REQUIRED_AGENTS)}, "
+        f"found {sorted(found)}",
     )
 
-    write_commands = [
-        "git add .",
-        "git commit -m test",
-        "git push origin HEAD",
-        "git merge main",
-        "git rebase main",
-        "git checkout -b feature",
-        "gh pr create --title test",
-        "gh api repos/x/y",
-    ]
-    human_only_commands = [
-        "gh pr merge 1 --merge",
-        "gh pr merge 1",
-    ]
-    read_commands = [
-        "git status --short",
-        "git diff --stat",
-        "git log --oneline -1",
-        "git show HEAD",
-        "gh pr view 1",
-        "gh issue view 30",
-    ]
-
     agent_rules: dict[str, list[dict[str, Any]]] = {}
+    combined_by_agent: dict[str, list[dict[str, Any]]] = {}
     for path in files:
         agent = path.stem
         frontmatter, body = read_markdown(path)
-        require(
-            frontmatter.get("mode") == REQUIRED_AGENTS.get(agent),
-            f"{agent}: expected mode {REQUIRED_AGENTS.get(agent)!r}",
-        )
         require(bool(frontmatter.get("description")), f"{agent}: description is required")
         require(len(body.strip()) > 200, f"{agent}: system prompt is unexpectedly short")
 
         rules = parse_permissions(path)
         agent_rules[agent] = rules
-        require(
-            not any(
-                rule.get("action") == "*"
-                and rule.get("resource") == "*"
-                and rule.get("effect") == "allow"
-                for rule in rules
-            ),
-            f"{agent}: a broad allow rule would override the project write restrictions",
-        )
+        reject_dangerous_rules(agent, rules)
+        check_agent_rules(agent, frontmatter.get("mode"), rules)
+
         combined = list(global_rules) + rules
-        for command in write_commands:
-            expected = "allow" if agent == "git-manager" else "deny"
-            actual = effective_effect(combined, "shell", command)
+        combined_by_agent[agent] = combined
+        for action, value, wanted in policy_expectations(agent):
+            actual = effective_effect(combined, action, value)
             require(
-                actual == expected,
-                f"{agent}: {command!r} resolves to {actual}, expected {expected}",
-            )
-        for command in human_only_commands:
-            require(
-                effective_effect(combined, "shell", command) == "deny",
-                f"{agent}: pull-request merge is reserved for the human user",
-            )
-        for command in read_commands:
-            require(
-                effective_effect(combined, "shell", command) == "allow",
-                f"{agent}: read-only command {command!r} must stay allowed",
+                actual == wanted,
+                f"{agent}: {action} {value!r} resolves to {actual}, expected {wanted}",
             )
 
         def expect_edit(target: str, expected: str) -> None:
@@ -481,21 +834,60 @@ def check_config() -> None:
                 f"{agent}: subagent delegation belongs to the orchestrator",
             )
 
+    git_manager_rules = agent_rules["git-manager"]
     git_manager_allows = [
         rule
-        for rule in agent_rules["git-manager"]
-        if rule.get("action") == "shell" and rule.get("effect") == "allow"
+        for rule in git_manager_rules
+        if rule.get("action") == "shell"
+        and rule.get("effect") == "allow"
+        and str(rule.get("resource", "")).startswith(("git ", "gh ", "rtk git ", "rtk gh "))
     ]
     require(bool(git_manager_allows), "git-manager must have Git/GitHub write allow rules")
-    require(
-        not any(
-            str(rule.get("resource", "")).startswith("gh pr merge")
-            for rule in git_manager_allows
-        ),
-        "git-manager must not have a pull-request merge allow rule",
-    )
+    for forbidden in ("gh api", "gh pr merge", "rtk gh api", "rtk gh pr merge"):
+        require(
+            not any(
+                str(rule.get("resource", "")).startswith(forbidden)
+                for rule in git_manager_allows
+            ),
+            f"git-manager must not have an allow rule for {forbidden!r}: it is "
+            "reserved for the human user",
+        )
+    trailing_deny_positions: dict[str, int] = {}
+    for index, rule in enumerate(git_manager_rules):
+        if rule.get("effect") == "deny" and rule.get("action") == "shell":
+            trailing_deny_positions[str(rule.get("resource", ""))] = index
+    for resource in GIT_MANAGER_REQUIRED_TRAILING_DENIES:
+        position = trailing_deny_positions.get(resource)
+        require(
+            position is not None,
+            f"git-manager: deny rule {resource!r} must exist in the frontmatter",
+        )
+        later_write_allows = [
+            str(rule.get("resource", ""))
+            for rule in git_manager_rules[position + 1 :]
+            if rule.get("action") == "shell"
+            and rule.get("effect") == "allow"
+            # The project policy re-enables *.env.example after its own env
+            # deny; the mirrored allow may follow the deny block for the same
+            # reason and is not a Git write.
+            and str(rule.get("resource", "")) != "*.env.example"
+        ]
+        require(
+            not later_write_allows,
+            f"git-manager: allow rule(s) {later_write_allows} appear after the "
+            f"deny rule {resource!r}; the denials must stay last",
+        )
+
     for agent, rules in agent_rules.items():
+        combined = combined_by_agent[agent]
         if agent == "git-manager":
+            for rule in git_manager_allows:
+                resource = str(rule.get("resource", ""))
+                sample = resource.replace("*", "sample").strip()
+                require(
+                    effective_effect(combined, "shell", sample) == "allow",
+                    f"git-manager: derived write command {sample!r} is not allowed",
+                )
             continue
         shell_allows = [
             rule
@@ -506,7 +898,6 @@ def check_config() -> None:
             not shell_allows,
             f"{agent}: shell allow rules could override the project write restrictions",
         )
-        combined = list(global_rules) + rules
         for rule in git_manager_allows:
             resource = str(rule.get("resource", ""))
             sample = resource.replace("*", "sample").strip()
@@ -514,18 +905,16 @@ def check_config() -> None:
                 effective_effect(combined, "shell", sample) == "deny",
                 f"{agent}: derived write command {sample!r} is not denied",
             )
-    git_manager_combined = list(global_rules) + agent_rules["git-manager"]
-    for rule in git_manager_allows:
-        resource = str(rule.get("resource", ""))
-        sample = resource.replace("*", "sample").strip()
-        require(
-            effective_effect(git_manager_combined, "shell", sample) == "allow",
-            f"git-manager: derived write command {sample!r} is not allowed",
-        )
 
     agents_md = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     require("feedback-contract.md" in agents_md, "AGENTS.md must point to the feedback contract")
     require("ADR" in agents_md, "AGENTS.md must describe the ADR baseline")
+    require(".tmp/" in agents_md, "AGENTS.md must document the .tmp/ scratch convention")
+    require("RTK" in agents_md, "AGENTS.md must document the RTK usage rules")
+    require(
+        "govulncheck" in agents_md and "golangci-lint" in agents_md and "jactionlint" in agents_md,
+        "AGENTS.md must list the enabled Go quality tools",
+    )
 
     contract = (ROOT / "docs" / "workflow" / "feedback-contract.md").read_text(
         encoding="utf-8"
@@ -574,6 +963,7 @@ def adr_signature(adr: dict[str, Any]) -> str:
         "supersedes",
         "superseded-by",
         "conflicts-with",
+        "body_sha256",
     )
     return json.dumps({key: adr.get(key) for key in keys}, sort_keys=True)
 
@@ -735,14 +1125,27 @@ def check_reports(scenario_path: Path) -> None:
         actual_status == expected["ledger"],
         f"ledger status mismatch: expected {expected['ledger']}, got {actual_status}",
     )
-    for expected_gap in expected.get("gaps_include", []):
-        require(expected_gap in gaps, f"expected gap not found: {expected_gap}")
-    for expected_escalation in expected.get("escalations_include", []):
+    if "gaps" in expected:
         require(
-            expected_escalation in escalations,
-            f"expected escalation not found: {expected_escalation}",
+            set(gaps) == set(expected["gaps"]),
+            f"gap set mismatch: expected {sorted(expected['gaps'])}, got {sorted(gaps)}",
         )
-    print("PASS reports: synthetic reports reconcile with gaps and escalations as expected")
+    else:
+        for expected_gap in expected.get("gaps_include", []):
+            require(expected_gap in gaps, f"expected gap not found: {expected_gap}")
+    if "escalations" in expected:
+        require(
+            set(escalations) == set(expected["escalations"]),
+            "escalation set mismatch: expected "
+            f"{sorted(expected['escalations'])}, got {sorted(escalations)}",
+        )
+    else:
+        for expected_escalation in expected.get("escalations_include", []):
+            require(
+                expected_escalation in escalations,
+                f"expected escalation not found: {expected_escalation}",
+            )
+    print("PASS reports: synthetic reports reconcile with the exact expected gaps and escalations")
 
 
 def check_adr_fixture() -> None:
@@ -764,8 +1167,29 @@ def check_adr_fixture() -> None:
     )
 
 
+def check_permissions_fixture() -> None:
+    base = FIXTURES / "permissions"
+    broad_rules = parse_permissions(base / "planner-broad-allow.md")
+    try:
+        check_agent_rules("planner", "subagent", broad_rules)
+    except CheckError as error:
+        require(
+            "broad allow" in str(error),
+            f"planner fixture must fail on the broad allow rule, got: {error}",
+        )
+    else:
+        raise CheckError("planner fixture with an action '*' allow rule must be rejected")
+    compliant_rules = parse_permissions(base / "reviewer-valid.md")
+    check_agent_rules("reviewer", "subagent", compliant_rules)
+    print(
+        "PASS permissions fixtures: over-broad allow rules are rejected and "
+        "compliant agent rules pass"
+    )
+
+
 def check_fixtures() -> None:
     check_adr_fixture()
+    check_permissions_fixture()
     check_reports(FIXTURES / "workflow" / "scenario.json")
 
 

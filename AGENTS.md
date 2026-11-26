@@ -58,6 +58,33 @@ loaded into every agent through `opencode.jsonc`.
 - Keep credentials, personal provider configuration and private account details
   in their authorised local locations. Repository files contain placeholders,
   model-agnostic defaults and non-secret configuration only.
+- Never read or write credential stores or secret files — `~/.ssh/`, `~/.aws/`,
+  `~/.gnupg/`, `~/.config/gh/`, `~/.local/share/opencode/auth.json` and every
+  `*.env` / `*.env.*` file except the committed `.env.example`. The permission
+  policy denies file access to them and mirrors the same locations in shell
+  command strings.
+- Access outside the worktree requires approval. Paths outside the active
+  worktree resolve to `ask` for the `external_directory` gate and for RTK
+  commands; `~/.config/opencode/*` stays local and is readable and editable on
+  approval only.
+- Scratch work belongs under `.tmp/` inside the worktree and must be removed
+  before the task reports back. Do not copy test material to `/tmp` or the home
+  directory.
+- Use RTK for output condensing, never to bypass permissions: `rtk git ...` and
+  `rtk gh ...` mirror the plain `git`/`gh` rules one-to-one, the RTK file and
+  report tools are allowed, but `rtk test`, `rtk err` and `rtk summary` execute
+  hidden commands and are denied; `rtk bypass` and `rtk proxy` ask. Filtered
+  Go quality runs are the exception: `rtk test` may wrap `govulncheck`,
+  `golangci-lint` and `jactionlint` through the narrow allow patterns, and the
+  nested-write denials still win over them.
+- The Go quality toolchain is allowed directly: `go`, `govulncheck`,
+  `golangci-lint` and `jactionlint`. Infrastructure, cluster, cloud, database
+  and network tools (`docker`, `kubectl`, `oc`, `aws`, `psql`, `wget`, and
+  their RTK mirrors) ask for approval; `pnpm`, `dotnet` and their RTK mirrors
+  are denied.
+- Merging a pull request is reserved for the human user: `gh api` is denied
+  project-wide and `gh pr merge` is denied for every agent. Direct pushes to
+  `main` are denied even for the Git Manager.
 - Use project configuration for shared workflow settings and keep personal model
   assignments in the global OpenCode configuration. See
   [`docs/workflow/model-assignments.md`](docs/workflow/model-assignments.md).

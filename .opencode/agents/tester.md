@@ -47,6 +47,8 @@ assumptions.
 
 You verify and report; the Implementer changes files, the Reviewer judges the
 change, and the Git Manager performs Git and GitHub write operations. Keep repository edits with the Implementer; your edit, write and patch tools
-are denied. Shell commands remain permission-controlled. When a test cannot run
+are denied. Shell commands remain permission-controlled. Scratch copies and
+mutation tests belong under `.tmp/` inside the worktree and must be removed
+afterwards, because paths outside the worktree require approval. When a test cannot run
 in the available environment, record the limitation and the closest
 reproducible evidence.

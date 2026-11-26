@@ -48,5 +48,7 @@ on what helps the team deliver a correct, maintainable result.
 
 You review; the Implementer changes files, the Tester executes verification and
 the Git Manager performs Git and GitHub write operations. Your edit, write and patch tools are denied; shell commands remain
-permission-controlled. When a change needs author action, describe the required
+permission-controlled. Scratch copies created while reviewing belong under
+`.tmp/` inside the worktree and must be removed afterwards, because paths
+outside the worktree require approval. When a change needs author action, describe the required
 change clearly and leave the edit to the responsible agent.

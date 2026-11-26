@@ -1,16 +1,17 @@
 # Issue 30 — Establish project-specific OpenCode multi-agent development workflow
 
 - Branch: `issue-30-multi-agent-development-workflow`
+- Reviewed commit: `498444ceaf78f53bae419870202c91e90b43315c` (frozen diff, 29 files)
 - Pull request: created after the review and human-approval gate
 - Last updated: 2026-11-26
-- Human approval: pending pull-request review
+- Human approval: pending commit/PR handover and pull-request review
 
 ## Acceptance criteria
 
 | ID | Criterion | Delegated to | Status | Evidence | Gaps / follow-up |
 | --- | --- | --- | --- | --- | --- |
 | AC-A1 | Define a primary Orchestrator and five subagents: Planner, Reviewer, Implementer, Tester, Git Manager | Implementer | covered | `.opencode/agents/*.md`, `docs/workflow/development-workflow.md`, `opencode debug agents` | none |
-| AC-A2 | Establish role boundaries and capability-based permissions, with Git write operations assigned to the Git Manager | Implementer | covered | `opencode.jsonc` project permissions, Git Manager allow rules, human-only merge deny, resolved-rule checks in `tools/workflow_check.py config`, tester report | Validator resolves rules with last-match-wins semantics and denies pull-request merge for every agent |
+| AC-A2 | Establish role boundaries and capability-based permissions, with Git write operations assigned to the Git Manager | Implementer | covered | `opencode.jsonc` ordered deny→allow→ask→deny policy, `.opencode/agents/git-manager.md` write allows with trailing denials, per-agent resolution tables in `tools/workflow_check.py config`, Implementer hardening report, Reviewer frozen-diff report | `gh api`, `gh pr merge` and pushes to `main` resolve to `deny` for all six agents, including the Git Manager. Residual: a compound command that starts with an allowed Git verb stays allowed for the Git Manager (recorded as accepted risk, see unresolved items) |
 | AC-A3 | Use positive, actionable and constructive language; express restrictions through permissions and explicit responsibilities | Implementer | covered | Agent prompts and `AGENTS.md` | none |
 | AC-A4 | Support configurable model assignments and preserve existing global configuration | Implementer | covered | `docs/workflow/model-assignments.md`, `opencode debug config`, inherited effective models | none |
 | AC-A5 | Verify project-specific agent discovery with OpenCode v2.4.1 and document layout and shared instruction loading | Implementer | covered | `docs/validation/opencode-v2.4.1-discovery.md`, `opencode debug agents` | none |
@@ -26,9 +27,9 @@
 | AC-F5 | Resolve gaps through follow-up or escalation; record unresolved items before handover | Orchestrator | covered | Feedback contract reconciliation rules, fixture gaps and escalations | none |
 | AC-F6 | Require independent plan review before implementation and independent code review before pull-request completion | Reviewer | covered | `docs/workflow/development-workflow.md`, Reviewer agent, `AGENTS.md` quality gates | This pull request is reviewed by a human before merge |
 | AC-V1 | Document the complete development workflow and shared instructions | Implementer | covered | `AGENTS.md`, `docs/workflow/development-workflow.md`, `docs/workflow/model-assignments.md` | none |
-| AC-V2 | Validate configuration discovery, ADR baseline handling and feedback reconciliation with offline fixtures and synthetic reports; include an omitted criterion and a proposed ADR in an open-PR scenario | Tester | partial | Tester report, `tools/workflow_check.py`, `docs/validation/`, `docs/validation/workflow-check-output.txt`, mutation tests T1–T7 and F2–F4 | Fixes applied; final frozen-diff verification pending |
-| AC-V3 | Store agent definitions and shared instructions in the repository; keep credentials and personal provider settings in authorised locations | Implementer | covered | `.opencode/agents/`, `AGENTS.md`, `docs/workflow/`, `opencode.jsonc` | none |
-| AC-V4 | Preserve global OpenCode configuration and hand over reviewed pull requests for human approval | Orchestrator / Git Manager | covered | `opencode debug config` sources; global file unchanged; Git Manager handover instructions; merge denied for every agent | Human review and merge pending |
+| AC-V2 | Validate configuration discovery, ADR baseline handling and feedback reconciliation with offline fixtures and synthetic reports; include an omitted criterion and a proposed ADR in an open-PR scenario | Tester | covered | Tester frozen-commit report (9/9 checks, `python3 tools/workflow_check.py all` exit 0, recorded output byte-identical), Reviewer frozen-diff report, mutation tests F2–F4, new permission fixture | Evidence covers commit `498444c`. Delta verification of the hardening commit is a handover item, not a criterion gap |
+| AC-V3 | Store agent definitions and shared instructions in the repository; keep credentials and personal provider settings in authorised locations | Implementer | covered | `.opencode/agents/`, `AGENTS.md`, `docs/workflow/`, `opencode.jsonc` | Credential paths denied for read, edit, external access and shell strings; `~/.config/opencode/*` requires approval; `.env.example` stays readable |
+| AC-V4 | Preserve global OpenCode configuration and hand over reviewed pull requests for human approval | Orchestrator / Git Manager | covered | `opencode debug config` sources; global file unchanged; Git Manager handover instructions; `gh pr merge`, `gh api` and pushes to `main` denied for every agent and re-denied last in the Git Manager | Human review and merge pending |
 | AC-V5 | Keep deliverables focused on the development workflow and supporting documentation | Orchestrator | covered | Changed-file review | Application implementation remains in #27–#29 |
 
 ## Reports reconciled
@@ -38,8 +39,15 @@
 | Synthetic fixture | Planner, Implementer, Reviewer reconciliation | mixed | 2026-11-26 | Exercises omitted criterion, unverified criterion, undelegated criterion, missing report and proposed ADR conflict |
 | Local discovery | OpenCode v2.4.1 agent and config discovery | completed | 2026-11-26 | Six agents discovered with expected modes; project and global config merged; shared instruction loaded |
 | Tester | Independent verification | Completed | 2026-11-26 | Validator, discovery, permissions and JSON/link checks passed; two broken links and a validator-strength gap found and fixed |
-| Reviewer | Independent code review | Partial | 2026-11-26 | Found R1 and F2–F8; R1 and F2–F6/F8 fixed, F7 final frozen-diff re-review pending |
-| Orchestrator | Issue 30 implementation evidence | completed | 2026-11-26 | Workflow, ADRs, contract, ledger and offline validator delivered |
+| Reviewer | Independent code review, first pass | Partial | 2026-11-26 | Found R1 and F2–F8; R1 and F2–F6/F8 fixed, F7 final frozen-diff re-review pending |
+| Tester | Frozen-commit verification of `498444c` | Completed | 2026-11-26 | All nine checks passed; recorded output byte-identical; `gh api` merge bypass and ADR diagnostics reported as follow-up |
+| Reviewer | Frozen-diff re-review of `498444c` | Completed | 2026-11-26 | F7 closed; all 21 criteria met in the commit; F-1 `gh api` and F-2 `action: "*"` named as merge blockers, F-3 ledger state and F-4–F-8 improvements |
+| Implementer | Permission hardening and RTK policy | Completed | 2026-11-26 | RTK mirroring, ask/deny matrix, credential-path denials, `gh api` allow removed, push-to-main denials, validator F-1/F-2/F-4/F-5/F-7, Go quality-tool allows |
+| Orchestrator | Ledger reconciliation and handover preparation | in progress | 2026-11-26 | Combined coverage recorded from six reports; hardening commit, delta verification and PR handover remain |
+
+The hardening round changed files after the frozen commit, so the frozen-diff
+reviews above do not cover its diff. Tester and Reviewer delta verification of
+the hardening commit is required before the pull request is marked ready.
 
 The synthetic reports are fixtures, not reports from real subagent sessions for
 this issue. They validate the reconciliation rules. The pull request is subject
@@ -61,19 +69,32 @@ to the independent review and human-approval gate before merge.
 | Medium | F4: the actual-repository ADR check was non-asserting, contained a dead `require`, and left open-PR `Rejected`/`Superseded` statuses unchanged. | Added real assertions, removed the dead check, map every open-PR ADR to `Proposed` (or `In Review`) and corrected the validation README. | Resolved |
 | Medium/Low | F5: documentation said "read-only file access" although shell commands remain permission-controlled. | Reworded to "edit, write and patch tools denied; shell remains permission-controlled" across agents and docs. | Resolved |
 | Low | F6: validation console blocks were abridged and the discovery record contained personal model IDs. | Added `docs/validation/workflow-check-output.txt` as a verbatim run and replaced model IDs with "Global OpenCode assignment". Blocks are labelled abridged. | Resolved |
-| Low | F7: the review targeted a moving, uncommitted tree. | Freeze the final tree in a commit, record its SHA, and re-run Tester and Reviewer on the frozen diff before the pull request is completed. | Pending |
+| Low | F7: the review targeted a moving, uncommitted tree. | Froze the tree as `498444c`, recorded the SHA and re-ran Tester and Reviewer against that commit. Both reported on the immutable diff. | Resolved |
+| Medium | F-1 (Tester and Reviewer): the Git Manager's `gh api*` allow permitted a REST pull-request merge, so the human-only merge boundary was enforceable only by convention. | Removed the `gh api*` allow, kept `gh api*`/`gh pr merge*` denied project-wide and re-denied them last in the Git Manager, and added validator assertions for REST, `-X PUT`, GraphQL and RTK forms. | Resolved |
+| Medium | F-2 (Reviewer): an `action: "*"` allow rule in a non-Git-Manager agent passed the validator because only `action: shell` was filtered. Reproduced with `planner` and `git notes*`. | Wildcard actions are treated as shell-capable; any `action: "*"` allow is rejected project-wide, and `docs/validation/fixtures/permissions/planner-broad-allow.md` is a regression fixture. | Resolved |
+| Low | F-4 (Reviewer and Tester): ADR reference validation missed `superseded-by`, treated known-but-non-accepted merged ADRs as unknown, and could silently drop a conflict on an id collision. | Validate `supersedes`, `superseded-by` and `conflicts-with` against all known ADR ids, keep the accepted baseline separate for escalation, reject proposal-id collisions and make the non-accepted-conflict error reachable. | Resolved |
+| Low | F-5 (Reviewer): extra agent files and agent files without `mode` passed validation. | Require exactly the six agent files and a `mode` key in each. | Resolved |
 | Low | F8: `.gitignore` did not guard local overrides or environment files. | Added `.env*`, `opencode.local.json(c)` and `*.local.json(c)` patterns. | Resolved |
+| Low | F-7 (Reviewer): body-only edits to accepted ADRs were not detected and `check_reports` used "includes" checks, so unexpected gaps passed. | Added a SHA-256 of the ADR body to the signature and assert exact expected gap and escalation sets for the fixture. | Resolved |
+| Informational | Tester findings 3 and 5: `adr` standalone runs only the actual-repository check, and the recorded output depends on the `main`/`origin/main` ref state. | Corrected the validation README wording and documented the capture conditions next to the recorded output. | Resolved |
+| Low | Tester finding 4: `adr_from_text` builds its default id eagerly and raises `IndexError` for a stem without a dash. Latent only; real call sites use `ADR-*.md`. | Not changed in the hardening round; recorded as a small validator follow-up. | Open |
+| Decision | RTK mirroring: `rtk git`/`rtk gh` are pass-throughs, `rtk test`/`err`/`summary` execute hidden commands, `rtk bypass`/`proxy` are escape hatches. | Mirror every plain rule in RTK form, deny `rtk test`/`err`/`summary`, ask for `bypass`/`proxy`, and ask for RTK commands touching paths outside the worktree. | Implemented |
+| Decision | Tooling scope: the project is Go with a Python validator and does not use Node or .NET. | `go`, `govulncheck`, `golangci-lint` and `jactionlint` are allowed, including narrow `rtk test` filters; `pnpm` and `dotnet` are denied; `docker`, `kubectl`, `oc`, `aws`, `psql` and `wget` require approval. | Implemented |
+| Decision | Credential and path handling. | Deny credential stores for read, edit, external access and shell strings; `~/.config/opencode/*` is approval-only; access outside the worktree requires approval; scratch work belongs under `.tmp/`. | Implemented |
 | Informational | User decision: merging a pull request is reserved for the human user. | Removed `gh pr merge*` from the Git Manager allow rules, added an explicit project deny and a validator assertion, and updated agent and workflow instructions. | Resolved |
 
 ## Architecture baseline
 
 - Accepted baseline: ADR-0001 and ADR-0002 become accepted when this pull
   request is merged; `main` had no ADR baseline before this change.
-- Proposals in this pull request: ADR-0001 and ADR-0002.
+- Proposals in this pull request: ADR-0001 and ADR-0002. ADR-0002 now also
+  documents the RTK-aware permission model, the credential-path denials, the
+  approval rule for paths outside the worktree and the enforcement of
+  human-only merge.
 - Conflicts: none between the proposals; the fixture exercises a synthetic
   conflict with an already merged baseline.
 - Decisions needed: human approval of ADR-0001 and ADR-0002 through the pull
-  request.
+  request. The accepted baseline stays empty until that merge.
 
 ## Unresolved items
 
@@ -85,8 +106,23 @@ to the independent review and human-approval gate before merge.
 - Configuration discovery was verified against the local OpenCode v2.4.1 and
   the existing global model assignments. A different OpenCode version or model
   configuration may require a repeated discovery check.
-- Final Tester and Reviewer verification must run against the frozen commit and
-  its recorded SHA before the pull request is marked ready for human approval.
+- The hardening round after `498444c` changes `opencode.jsonc`, the Git Manager
+  rules, the validator, fixtures and documentation. Tester and Reviewer delta
+  verification must run against the hardening commit before the pull request is
+  marked ready for human approval.
+- The three residuals below are documented and accepted in ADR-0002 under
+  `# Residual risks`:
+  - Because last-match-wins resolves the Git Manager's write allows before its
+    trailing denials, a compound command that starts with an allowed Git verb
+    stays allowed for that agent. Protected verbs (`gh api`, `gh pr merge`,
+    pushes to `main`) still resolve to `deny`.
+  - Non-RTK shell commands that touch paths outside the worktree are not
+    restricted by a general path rule. Only the credential locations are
+    denied; RTK commands and file tools require approval outside the worktree.
+  - The `rtk * ~*` approval rule also fires on tilde revisions such as
+    `rtk git show HEAD~1`. Approval prompt only, not a silent allow.
+- Validator follow-up: the eager `setdefault` id in `adr_from_text` still raises
+  `IndexError` for an ADR path without a dash. No current call site triggers it.
 
 ## Deferred or out-of-scope work
 
@@ -100,9 +136,17 @@ to the independent review and human-approval gate before merge.
 
 - Plan review: workflow gates defined; synthetic reconciliation covers planner,
   implementer and reviewer reports.
-- Code review: Reviewer completed a first pass (R1 and F2–F8). Fixes are applied;
-  a frozen-diff re-review is required before pull-request completion. Human
-  review of the pull request is pending.
-- Test evidence: `python3 tools/workflow_check.py all` passes; independent tester report and mutation checks recorded.
-- Human approval: pending.
-- Git Manager: branch, commit and pull request after approval.
+- Code review: Reviewer completed the frozen-diff re-review of `498444c` and
+  found no Critical or High defect. Its two merge blockers (F-1 `gh api`,
+  F-2 `action: "*"`) and the Low/Informational findings are addressed in the
+  hardening round. Delta review of the hardening commit is pending.
+- Test evidence: `python3 tools/workflow_check.py all` exits 0 and the recorded
+  output is byte-identical to a fresh run; the Tester's frozen-commit report
+  passed all nine checks; mutation and fixture checks recorded.
+- Human approval: granted on 2026-11-26 for the commit and push, with the pull
+  request to follow after green delta verification. The two residual risks
+  above are accepted and recorded in ADR-0002. Merging stays with the human
+  user.
+- Git Manager: branch, commit, push and pull request after approval. Expected
+  paths are the 14 modified files (13 hardening files plus this ledger) and the
+  two new fixtures under `docs/validation/fixtures/permissions/`.

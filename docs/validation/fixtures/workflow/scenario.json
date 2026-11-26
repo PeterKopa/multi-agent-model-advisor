@@ -17,7 +17,7 @@
       "AC-06": "missing",
       "AC-07": "missing"
     },
-    "gaps_include": [
+    "gaps": [
       "AC-03:delegated_unreported:planner",
       "AC-05:delegated_unreported:tester",
       "AC-06:delegated_unreported:orchestrator",
@@ -28,10 +28,10 @@
       "follow_up:AC-06",
       "follow_up:AC-07"
     ],
-    "escalations_include": [
-      "report:reviewer:Needs Decision",
+    "escalations": [
       "adr:ADR-0002:conflicts:ADR-0001",
-      "adr:ADR-0002:declared-accepted-in-open-pr"
+      "adr:ADR-0002:declared-accepted-in-open-pr",
+      "report:reviewer:Needs Decision"
     ]
   }
 }

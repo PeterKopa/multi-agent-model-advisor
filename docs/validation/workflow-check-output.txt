@@ -3,6 +3,7 @@ ADR baseline (merged, accepted): ['ADR-0001']
 ADR proposal: ADR-0002 declared=Accepted effective=Proposed
 ADR escalation: ADR-0002 conflicts with ADR-0001
 PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+PASS permissions fixtures: over-broad allow rules are rejected and compliant agent rules pass
 Acceptance-criteria ledger:
 Criterion  Status         Gaps                                   Delegated to
 AC-01      covered        -                                      planner
@@ -26,7 +27,7 @@ Escalations:
   - adr:ADR-0002:conflicts:ADR-0001
   - adr:ADR-0002:declared-accepted-in-open-pr
   - report:reviewer:Needs Decision
-PASS reports: synthetic reports reconcile with gaps and escalations as expected
+PASS reports: synthetic reports reconcile with the exact expected gaps and escalations
 ADR baseline (merged, accepted): []
 ADR proposal: ADR-0001 declared=Accepted effective=Proposed
 ADR proposal: ADR-0002 declared=Accepted effective=Proposed

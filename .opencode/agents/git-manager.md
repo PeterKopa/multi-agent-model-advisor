@@ -81,6 +81,30 @@ permissions:
   - action: shell
     resource: "git worktree*"
     effect: allow
+  # RTK mirrors for the write commands the handover needs. Destructive git
+  # allows (reset, clean, rebase, merge, tag, submodule) are deliberately not
+  # mirrored; RTK forms of those stay denied by the project policy.
+  - action: shell
+    resource: "rtk git add*"
+    effect: allow
+  - action: shell
+    resource: "rtk git branch*"
+    effect: allow
+  - action: shell
+    resource: "rtk git checkout*"
+    effect: allow
+  - action: shell
+    resource: "rtk git commit*"
+    effect: allow
+  - action: shell
+    resource: "rtk git push*"
+    effect: allow
+  - action: shell
+    resource: "rtk git switch*"
+    effect: allow
+  - action: shell
+    resource: "rtk gh pr create*"
+    effect: allow
   - action: shell
     resource: "gh pr create*"
     effect: allow
@@ -123,15 +147,93 @@ permissions:
   - action: shell
     resource: "gh release*"
     effect: allow
-  - action: shell
-    resource: "gh api*"
-    effect: allow
   - action: webfetch
     resource: "*"
     effect: ask
   - action: websearch
     resource: "*"
     effect: ask
+  # These rules are intentionally last. Because the last matching rule wins,
+  # they must sit after every allow rule so gh api, pull-request merges,
+  # pushes to main and sensitive paths stay denied even for this agent.
+  - action: shell
+    resource: "gh api*"
+    effect: deny
+  - action: shell
+    resource: "gh pr merge*"
+    effect: deny
+  - action: shell
+    resource: "rtk gh api*"
+    effect: deny
+  - action: shell
+    resource: "rtk gh pr merge*"
+    effect: deny
+  - action: shell
+    resource: "git push * main*"
+    effect: deny
+  - action: shell
+    resource: "git push *:main*"
+    effect: deny
+  - action: shell
+    resource: "git push *heads/main*"
+    effect: deny
+  - action: shell
+    resource: "rtk git push * main*"
+    effect: deny
+  - action: shell
+    resource: "rtk git push *:main*"
+    effect: deny
+  - action: shell
+    resource: "rtk git push *heads/main*"
+    effect: deny
+  - action: shell
+    resource: "*/.ssh/*"
+    effect: deny
+  - action: shell
+    resource: "*/.aws/*"
+    effect: deny
+  - action: shell
+    resource: "*/.gnupg/*"
+    effect: deny
+  - action: shell
+    resource: "*/.config/gh/*"
+    effect: deny
+  - action: shell
+    resource: "*/.kube/*"
+    effect: deny
+  - action: shell
+    resource: "*/.docker/config.json*"
+    effect: deny
+  - action: shell
+    resource: "*/.netrc*"
+    effect: deny
+  - action: shell
+    resource: "*/.git-credentials*"
+    effect: deny
+  - action: shell
+    resource: "*/.npmrc*"
+    effect: deny
+  - action: shell
+    resource: "*/.pypirc*"
+    effect: deny
+  - action: shell
+    resource: "*/.local/share/opencode/auth.json*"
+    effect: deny
+  - action: shell
+    resource: "*/.local/share/opencode/opencode.db*"
+    effect: deny
+  - action: shell
+    resource: "*/.local/share/opencode/log/*"
+    effect: deny
+  - action: shell
+    resource: "*Library/Keychains/*"
+    effect: deny
+  - action: shell
+    resource: "*.env*"
+    effect: deny
+  - action: shell
+    resource: "*.env.example"
+    effect: allow
 ---
 
 # Mission
