@@ -1,0 +1,239 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs of the same PR/branch so queued runs do not pile up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and test (offline after module setup)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Every project-level step after the module setup step below (download
+      # plus tidiness verification) runs with Go module and toolchain
+      # resolution disabled.
+      #
+      # GOTOOLCHAIN=local, GOPROXY=off and GOSUMDB=off disable the Go
+      # toolchain/module resolution only. They are NOT an OS network sandbox:
+      # They do not sandbox the OS network and do not by themselves prove
+      # that no network connection was opened. Runtime offline behavior
+      # rests on code inspection (no network code in this bootstrap) and
+      # side-effect-free tests; see the ADR for the honest statement of
+      # what CI does and does not prove.
+      GOTOOLCHAIN: local
+      GOPROXY: off
+      GOSUMDB: off
+      GOFLAGS: -mod=readonly
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      # The only network-dependent project step. `go mod download` alone does
+      # not fetch the transitive test dependencies of dependencies that
+      # `go mod tidy` loads on a fresh runner, so tidy is verified here while
+      # the proxy is still available; the diff check fails on any
+      # go.mod/go.sum drift.
+      - name: Download modules and verify tidiness (build-time setup)
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+          GOSUMDB: sum.golang.org
+        run: |
+          go mod download
+          go mod tidy -diff
+          git diff --exit-code
+
+      - name: Verify module integrity
+        run: go mod verify
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt reported unformatted files:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
+
+      - name: Build offline binary with CI-test version
+        run: |
+          go build -trimpath \
+            -ldflags "-X github.com/PeterKopa/multi-agent-model-advisor/internal/app.version=ci-test" \
+            -o "$RUNNER_TEMP/multi-agent-model-advisor" \
+            ./cmd/multi-agent-model-advisor
+
+      - name: Assert --version output
+        run: |
+          version_out="$("$RUNNER_TEMP/multi-agent-model-advisor" --version)"
+          expected="multi-agent-model-advisor ci-test"
+          echo "--version output: $version_out"
+          if [ "$version_out" != "$expected" ]; then
+            echo "unexpected --version output, expected: $expected" >&2
+            exit 1
+          fi
+
+      - name: Assert --help output
+        run: |
+          if ! "$RUNNER_TEMP/multi-agent-model-advisor" --help \
+            > "$RUNNER_TEMP/help-actual.txt" 2> "$RUNNER_TEMP/help-stderr.txt"; then
+            echo "--help exited with a non-zero status, want exit 0" >&2
+            exit 1
+          fi
+          if [ -s "$RUNNER_TEMP/help-stderr.txt" ]; then
+            echo "--help wrote to stderr, want empty:" >&2
+            cat "$RUNNER_TEMP/help-stderr.txt" >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/help-expected.txt" <<'EOF'
+          Multi-Agent Model Advisor
+
+          Usage: multi-agent-model-advisor [-h | --help] [--version]
+
+          Options:
+            -h, --help     Show this help and exit.
+                --version  Print the version and exit.
+
+          Running without any option starts the interactive TUI shell.
+          The bootstrap screen does not load any project data.
+          Press q or Ctrl+C to quit.
+          EOF
+          if ! diff -u "$RUNNER_TEMP/help-expected.txt" "$RUNNER_TEMP/help-actual.txt"; then
+            echo "--help output differs from the expected stable text above" >&2
+            exit 1
+          fi
+
+  # Separate quality/security jobs. Each is its own job (not a step of
+  # build-test); all inherit the top-level permissions (contents: read) and
+  # the top-level concurrency group. Unlike build-test's project-level
+  # steps, these jobs run with ordinary module resolution and, where noted,
+  # use the network — that is CI tooling traffic on the CI machine, not a
+  # new property of the application, which stays offline at runtime.
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Network use: the action downloads the golangci-lint v2.15.0 binary
+      # from GitHub releases. That download is the only online step here.
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          args: --timeout=5m
+
+  govulncheck:
+    name: Vulnerability check (govulncheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Keep Go itself on the toolchain pinned by go.mod.
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Network use: downloading the govulncheck tool (Go module proxy) and
+      # the vulnerability database (vuln.go.dev).
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+
+      - name: Scan for known vulnerabilities
+        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
+
+  # Deliberate Trivy policy: the gate covers fixed HIGH/CRITICAL
+  # vulnerabilities plus secrets and misconfigurations at the selected
+  # severity. `ignore-unfixed: true` means vulnerabilities with no available
+  # fix are excluded from reported findings and the gate (the scan still
+  # runs), and severities below HIGH
+  # are not gated. A green run is evidence for this configured scope, not
+  # proof that no vulnerabilities exist.
+  trivy:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Network use: the action downloads the Trivy v0.76.2 binary and its
+      # vulnerability database. Findings fail the job (exit-code 1).
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          version: v0.76.2
+          hide-progress: true
+
+  workflow-lint:
+    name: Workflow lint (jactionlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Network use: the action downloads the jactionlint binary (pinned to
+      # the action's own release), then lints the workflow files locally.
+      # online: 'false' keeps jactionlint's own checks off the network.
+      - name: Lint workflows
+        uses: jdx/jactionlint@72c00452809bcca05b8bc12acdcf15dd7a9c1c5e # v2.6.0
+        with:
+          online: 'false'
