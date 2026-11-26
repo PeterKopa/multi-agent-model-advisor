@@ -31,7 +31,7 @@ Not implemented yet: model recommendations, YAML project files (#28), domain con
 ## Network isolation evidence
 
 - CI is not an OS network sandbox. In the build-test job, `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` disable the Go toolchain's module and toolchain resolution only; they do not block other sockets and do not prove that no connection was opened.
-- The ci.yml workflow contains five separate jobs. Build-and-test is the only job with project-level offline enforcement (after its module-setup step); the lint, govulncheck, Trivy and jactionlint jobs use the network deliberately to download tools, linters and scan/verify databases on the CI machine. That tooling traffic belongs to CI, not to the application, and does not change the application's runtime offline property.
+- The ci.yml workflow contains five separate jobs. Build-and-test is the only job whose project-level steps run with Go module/toolchain resolution disabled (after its module-setup step); the lint, govulncheck, Trivy and jactionlint jobs use the network deliberately to download tools, linters and scan/verify databases on the CI machine. That tooling traffic belongs to CI, not to the application, and does not change the application's runtime offline property.
 - Runtime offline behavior rests on code inspection (the bootstrap contains no network code — no HTTP or dialing calls) and side-effect-free unit tests. CI does not prove OS-level network isolation: no reproducible OS-level network-sandbox experiment on a running program exists for this project (a reviewer attempt to impose one on macOS 27.2.1 did not succeed and is not claimed as evidence). No claim of OS network isolation is made here.
 - A startup PTY smoke check of the program is recorded in the issue #27 PR discussion; it exercised CLI behavior only and is not evidence of network isolation. Application startup has no network code by inspection and test design.
 
@@ -64,16 +64,18 @@ go mod tidy -diff
 git diff --exit-code   # fails on go.mod/go.sum drift
 ```
 
-Offline verification (after that module setup):
+Build-test-equivalent verification with Go module/toolchain resolution disabled (not OS network isolation), after that module setup. The exports are scoped to the subshell so they cannot leak into later commands:
 
 ```sh
-export GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly
-go mod verify
-go test -race -count=1 ./...
-gofmt -l cmd internal   # must print nothing
+(
+  export GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly
+  go mod verify
+  go test -race -count=1 ./...
+  gofmt -l cmd internal   # must print nothing
+)
 ```
 
-Separate quality/security checks (run by their own CI jobs, not by build-test; the tools are downloaded over the network):
+Separate quality/security checks (run by their own CI jobs, not by build-test; they need network and tool installation themselves, so they are distinct from the offline verification above). `mise` is optional: the pinned tools can be installed by other means just as well.
 
 ```sh
 mise x golangci-lint@2.15.0 -- golangci-lint run ./...
@@ -82,6 +84,8 @@ go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
 mise x trivy@0.76.2 -- trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --quiet .
 mise x jactionlint@2.6.0 -- jactionlint
 ```
+
+Trivy policy (deliberate, not exhaustive): the gate covers fixed HIGH/CRITICAL vulnerabilities plus secrets and misconfigurations at the selected severity; `--ignore-unfixed` excludes vulnerabilities with no available fix from the scan and the gate, and severities below HIGH are not gated. A passing scan is evidence for this configured scope, not proof that no vulnerabilities exist.
 
 ## Run
 
@@ -95,6 +99,7 @@ mise x jactionlint@2.6.0 -- jactionlint
 - Running without any option starts the interactive TUI. When no controlling terminal is available (CI, fully detached pipes), startup fails with status 1.
 - In the TUI, press `q` or `Ctrl+C` to quit.
 - Unknown flags or positional arguments exit with status 2 and print usage to stderr.
+- If the stdout output of `--help` or `--version` cannot be written (e.g. a closed pipe), the program reports the failure to stderr as `<program>: write help|version: <err>` (best effort) and exits with status 1.
 
 ## Version injection
 

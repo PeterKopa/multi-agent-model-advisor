@@ -18,14 +18,14 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 
 - Go 1.27.4 — the `go` directive in `go.mod` is the single source of truth; CI's `setup-go` reads that exact version from `go.mod` via `go-version-file` with `check-latest: false` (locally verified as go1.27.4 darwin/arm64).
 - charm.land/bubbletea/v2 v2.2.0 — stable release (verified stable on 2026-11-26 at <https://pkg.go.dev/charm.land/bubbletea/v2@v2.2.0>). The v2 API is used (`tea.KeyPressMsg`, `tea.Model` with a `View() tea.View` method, `tea.NewView`, and `Program.Run()` returning `(Model, error)`). Its module declares `go 1.26.0`, which 1.27.4 satisfies. It is imported with the conventional alias `tea`.
-- `go.mod` and `go.sum` are the dependency pins: one direct UI dependency plus its transitive closure, committed to the repository and verified with `go mod verify`. CI enforces `GOFLAGS=-mod=readonly` for every module-consuming step and verifies `go mod tidy -diff` inside the online module-setup step so the pins cannot drift.
+- `go.mod` and `go.sum` are the dependency pins: one direct UI dependency plus its transitive closure, committed to the repository and verified with `go mod verify`. The build-test job enforces `GOFLAGS=-mod=readonly` for every module-consuming step it runs (the quality/security jobs use ordinary module resolution) and verifies `go mod tidy -diff` inside the online module-setup step so the pins cannot drift.
 - No other direct dependencies: no lipgloss or bubbles (styling/components), no YAML library, no database driver, no HTTP clients, no external services. Each of these belongs to later issues with their own verification.
 
 ## Module path and executable
 
 - Module path: `github.com/PeterKopa/multi-agent-model-advisor` — the repository name.
 - Single executable: `cmd/multi-agent-model-advisor`. `main()` only calls `os.Exit(app.Run(os.Args[1:], os.Stdout, os.Stderr))`.
-- CLI contract: `-h`/`--help` prints stable help to stdout and exits 0 (help wins over `--version`); `--version` prints `multi-agent-model-advisor <version>` to stdout and exits 0; unknown flags or positional arguments print an error plus usage to stderr and exit 2; running without any option starts the TUI, whose exit code mirrors the TUI result (0 on success, 1 on error).
+- CLI contract: `-h`/`--help` prints stable help to stdout and exits 0 (help wins over `--version`); `--version` prints `multi-agent-model-advisor <version>` to stdout and exits 0; a failing stdout write for `--help`/`--version` reports `<program>: write help|version: <err>` to stderr (best effort) and exits 1; unknown flags or positional arguments print an error plus usage to stderr and exit 2; running without any option starts the TUI, whose exit code mirrors the TUI result (0 on success, 1 on error).
 - The default version is `dev`, overridable at link time with `-ldflags "-X github.com/PeterKopa/multi-agent-model-advisor/internal/app.version=<value>"`.
 
 ## Package boundaries

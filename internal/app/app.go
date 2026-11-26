@@ -46,8 +46,9 @@ const usageText = "Usage: " + programName + " [-h | --help] [--version]\n" +
 
 // Run is the process entry point. It parses args, honors the --help and
 // --version flags and otherwise starts the minimal TUI shell. It returns the
-// process exit code: 0 on success, 1 when the TUI fails to start, and 2 for
-// usage errors.
+// process exit code: 0 on success, 1 when the TUI fails to start or when the
+// --help/--version stdout write fails (reported to stderr best effort), and
+// 2 for usage errors.
 func Run(args []string, stdout, stderr io.Writer) int {
 	return run(args, stdout, stderr, runTUI)
 }
@@ -82,11 +83,20 @@ func run(args []string, stdout, stderr io.Writer, startTUI func(io.Writer) error
 
 	switch {
 	case showHelp:
-		// Help wins over --version when both are requested.
-		_, _ = fmt.Fprint(stdout, helpText)
+		// Help wins over --version when both are requested. A failing
+		// help write is a real error and maps to exit 1; the stderr report
+		// below is best effort — if stderr fails too, the error stays
+		// unreported, consistent with the best-effort reporting here.
+		if _, err := fmt.Fprint(stdout, helpText); err != nil {
+			_, _ = fmt.Fprintf(stderr, "%s: write help: %v\n", programName, err)
+			return 1
+		}
 		return 0
 	case showVersion:
-		_, _ = fmt.Fprintf(stdout, "%s %s\n", programName, version)
+		if _, err := fmt.Fprintf(stdout, "%s %s\n", programName, version); err != nil {
+			_, _ = fmt.Fprintf(stderr, "%s: write version: %v\n", programName, err)
+			return 1
+		}
 		return 0
 	}
 

@@ -99,6 +99,53 @@ func TestRunFlagCases(t *testing.T) {
 	}
 }
 
+// failingWriter fails every write with its err. It stands in for a stdout
+// that cannot be written to, such as a closed pipe.
+type failingWriter struct{ err error }
+
+func (w *failingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestRunHelpVersionStdoutWriteFailure(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          []string
+		wantStderrSub string
+	}{
+		{
+			name:          "--help exits 1 when its stdout write fails",
+			args:          []string{"--help"},
+			wantStderrSub: "write help",
+		},
+		{
+			name:          "--version exits 1 when its stdout write fails",
+			args:          []string{"--version"},
+			wantStderrSub: "write version",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sentinel := errors.New("stub stdout failure")
+			var stderr bytes.Buffer
+
+			exit := run(tc.args, &failingWriter{err: sentinel}, &stderr, func(io.Writer) error {
+				t.Errorf("startTUI must not be called when the stdout write fails")
+				t.FailNow()
+				return nil
+			})
+
+			if exit != 1 {
+				t.Errorf("exit code = %d, want 1", exit)
+			}
+			for _, want := range []string{sentinel.Error(), tc.wantStderrSub} {
+				if !strings.Contains(stderr.String(), want) {
+					t.Errorf("stderr = %q, want it to contain %q", stderr.String(), want)
+				}
+			}
+		})
+	}
+}
+
 func TestRunStartsTUIWithoutArguments(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	calls := 0
