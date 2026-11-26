@@ -54,9 +54,11 @@ func TestQuitKeysReturnQuitCommand(t *testing.T) {
 				t.Fatalf("Update(%s) returned a nil command, want tea.Quit", tc.name)
 			}
 			// The command must produce a quit message; the command function
-			// itself is not compared.
-			if _, ok := cmd().(tea.QuitMsg); !ok {
-				t.Errorf("command produced %T, want tea.QuitMsg", cmd())
+			// itself is not compared. The command is invoked exactly once and
+			// the message stored, so it is not called twice.
+			quitMsg := cmd()
+			if _, ok := quitMsg.(tea.QuitMsg); !ok {
+				t.Errorf("command produced %T, want tea.QuitMsg", quitMsg)
 			}
 		})
 	}

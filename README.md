@@ -8,7 +8,7 @@ This repository is at an early bootstrap stage (issue #27). What exists today:
 
 - an executable with `--help` and `--version`,
 - a minimal Bubble Tea shell screen with documented quit controls,
-- offline build, offline test and offline CI verification.
+- offline build and offline tests, with CI running its checks offline after one module-setup step.
 
 Not implemented yet: model recommendations, YAML project files (#28), domain contracts (#29), provider adapters, quality scoring, inference, persistence or databases, and no external services of any kind. The delivery plan is described in [docs/roadmap.md](docs/roadmap.md).
 
@@ -19,13 +19,13 @@ Not implemented yet: model recommendations, YAML project files (#28), domain con
 ## Supported platforms
 
 - darwin/arm64 — manually verified locally.
-- linux/amd64 — verified in CI.
+- linux/amd64 (ubuntu-24.04) — target of the CI job; verified when the PR CI run is green.
 - All other platforms are explicitly not yet supported or verified.
 
 ## Setup/build-time network versus runtime offline
 
-- The Go toolchain and the module download (`go mod download` or the first `go get`/`go test` after a fresh clone) need network once — that is build-time setup, not a runtime feature.
-- At runtime the program is fully offline: it makes no network connections, needs no credentials, performs no inference, scans no projects and changes no configuration. CI verifies the offline property after the single download step (`GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`).
+- The Go toolchain and the module setup (the module download plus the `go mod tidy -diff` verification, or the first `go get`/`go test` after a fresh clone) need network once — that is build-time setup, not a runtime feature.
+- At runtime the program is fully offline: it makes no network connections, needs no credentials, performs no inference, scans no projects and changes no configuration. CI verifies the offline property after the single online module-setup step (`go mod download` plus `go mod tidy -diff`), running every project-level check after it with `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly`.
 
 ## Build, test and verify
 
@@ -36,13 +36,20 @@ go test ./...
 go build ./cmd/multi-agent-model-advisor   # produces ./multi-agent-model-advisor (gitignored)
 ```
 
-Offline verification (after one `go mod download`):
+Module setup (build-time, needs network; `go mod tidy -diff` fetches the transitive test dependencies of dependencies that `go mod download` alone does not cover, so tidiness is verified while the proxy is still reachable):
+
+```sh
+go mod download
+go mod tidy -diff
+git diff --exit-code   # fails on go.mod/go.sum drift
+```
+
+Offline verification (after that module setup):
 
 ```sh
 export GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly
 go mod verify
-go mod tidy -diff
-go test -race ./...
+go test -race -count=1 ./...
 gofmt -l cmd internal   # must print nothing
 ```
 
@@ -55,7 +62,7 @@ gofmt -l cmd internal   # must print nothing
 ./multi-agent-model-advisor            # starts the TUI
 ```
 
-- Running without any option starts the interactive TUI; it needs an interactive terminal. Without a TTY (pipes, CI), startup is refused and the program exits with status 1.
+- Running without any option starts the interactive TUI. When no controlling terminal is available (CI, fully detached pipes), startup fails with status 1.
 - In the TUI, press `q` or `Ctrl+C` to quit.
 - Unknown flags or positional arguments exit with status 2 and print usage to stderr.
 
@@ -69,7 +76,7 @@ go build -trimpath \
   -o multi-agent-model-advisor ./cmd/multi-agent-model-advisor
 ```
 
-CI builds the same way with the injected value `ci-test` and asserts the exact `--version` output.
+CI builds the same way with the injected value `ci-test` and asserts the exact `--version` and `--help` output, including empty stderr for `--help`.
 
 ## Architecture and packages
 
@@ -84,4 +91,4 @@ Packages, with dependency direction `cmd` → `internal/app` → `internal/tui`:
 
 ## CI and privacy
 
-CI (`.github/workflows/ci.yml`) enforces formatting, vetting, race-tested unit tests, module integrity/tidiness, an offline build and the CLI's `--version`/`--help` contract. Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.
+CI (`.github/workflows/ci.yml`) runs one online module-setup step (`go mod download` plus `go mod tidy -diff`) and then enforces, offline: module integrity (`go mod verify`), formatting, vetting, race-tested unit tests, the build and the CLI's exact `--version`/`--help` contract. Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.

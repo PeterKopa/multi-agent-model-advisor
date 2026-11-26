@@ -11,14 +11,14 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 ## Supported platforms
 
 - darwin/arm64 — manually verified locally (build, unit tests, CLI behavior).
-- linux/amd64 — verified in CI.
+- linux/amd64 (ubuntu-24.04) — target of the CI job; verified when the PR CI run is green.
 - All other GOOS/GOARCH combinations — including windows/\*, darwin on non-arm64, and linux on non-amd64 — are not claimed to be supported at this stage. No build matrix or runtime verification exists for them; platform support statements must be widened only after they are actually verified.
 
 ## Versions and dependency pinning
 
 - Go 1.27.4 — the `go` directive in `go.mod` and the CI setup pin exactly this version (locally verified as go1.27.4 darwin/arm64).
 - charm.land/bubbletea/v2 v2.2.0 — stable release (verified stable on 2026-11-26 at <https://pkg.go.dev/charm.land/bubbletea/v2@v2.2.0>). The v2 API is used (`tea.KeyPressMsg`, `tea.Model` with a `View() tea.View` method, `tea.NewView`, and `Program.Run()` returning `(Model, error)`). Its module declares `go 1.26.0`, which 1.27.4 satisfies. It is imported with the conventional alias `tea`.
-- `go.mod` and `go.sum` are the dependency pins: one direct UI dependency plus its transitive closure, committed to the repository and verified with `go mod verify`. CI enforces `GOFLAGS=-mod=readonly` and `go mod tidy -diff` so the pins cannot drift.
+- `go.mod` and `go.sum` are the dependency pins: one direct UI dependency plus its transitive closure, committed to the repository and verified with `go mod verify`. CI enforces `GOFLAGS=-mod=readonly` for every module-consuming step and verifies `go mod tidy -diff` inside the online module-setup step so the pins cannot drift.
 - No other direct dependencies: no lipgloss or bubbles (styling/components), no YAML library, no database driver, no HTTP clients, no external services. Each of these belongs to later issues with their own verification.
 
 ## Module path and executable
@@ -39,7 +39,7 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 ## Offline and side-effect guarantees
 
 - At runtime and in tests, the application performs no network access, no inference, no credential access, no project scanning and no configuration or file-system writes; `Init()` returns `nil`, so the model starts no commands, timers or I/O. The only keyboard events it acts on are the documented quit controls (`q`, `Ctrl+C`).
-- The only network touchpoint while developing or building is module download (`go mod download`) as build-time setup. CI performs that single download step and then enforces `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off` for module verification, format checks, vetting, race tests, tidiness checks and the build. CI is therefore not whole-job offline (toolchain and module downloads are setup), but every project-level step after setup runs offline.
+- The only network touchpoints while developing or building are the Go toolchain and module setup (`go mod download` plus `go mod tidy -diff`) as build-time setup; tidy runs online because `go mod download` alone does not fetch the transitive test dependencies of dependencies that tidy must load on a fresh cache. CI performs that single online setup step and then enforces `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly` for module verification, format checks, vetting, race tests and the build. CI is therefore not whole-job offline (toolchain and module setup are online), but every project-level check after setup runs offline.
 - The quit controls are documented both in the screen itself and in `--help` output (`Press q or Ctrl+C to quit.`).
 
 ## Consequences and rationale

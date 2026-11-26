@@ -11,11 +11,12 @@ permissions:
 
 jobs:
   build-test:
-    name: Build and test (offline)
+    name: Build and test (offline after module setup)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      # Everything after the single module download step runs fully offline.
+      # Every project-level step after the module setup step below (download
+      # plus tidiness verification) runs fully offline.
       GOTOOLCHAIN: local
       GOPROXY: off
       GOSUMDB: off
@@ -32,11 +33,19 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Download Go modules (build-time setup; the only network-dependent project step)
+      # The only network-dependent project step. `go mod download` alone does
+      # not fetch the transitive test dependencies of dependencies that
+      # `go mod tidy` loads on a fresh runner, so tidy is verified here while
+      # the proxy is still available; the diff check fails on any
+      # go.mod/go.sum drift.
+      - name: Download modules and verify tidiness (build-time setup)
         env:
           GOPROXY: https://proxy.golang.org,direct
           GOSUMDB: sum.golang.org
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy -diff
+          git diff --exit-code
 
       - name: Verify module integrity
         run: go mod verify
@@ -54,13 +63,7 @@ jobs:
         run: go vet ./...
 
       - name: Test with race detector
-        run: go test -race ./...
-
-      - name: Check module tidiness
-        run: go mod tidy -diff
-
-      - name: Fail on uncommitted generated changes
-        run: git diff --exit-code
+        run: go test -race -count=1 ./...
 
       - name: Build offline binary with CI-test version
         run: |
@@ -81,7 +84,30 @@ jobs:
 
       - name: Assert --help output
         run: |
-          if ! "$RUNNER_TEMP/multi-agent-model-advisor" --help | grep -qF 'Press q or Ctrl+C to quit.'; then
-            echo "--help is missing the documented quit instruction" >&2
+          if ! "$RUNNER_TEMP/multi-agent-model-advisor" --help \
+            > "$RUNNER_TEMP/help-actual.txt" 2> "$RUNNER_TEMP/help-stderr.txt"; then
+            echo "--help exited with a non-zero status, want exit 0" >&2
+            exit 1
+          fi
+          if [ -s "$RUNNER_TEMP/help-stderr.txt" ]; then
+            echo "--help wrote to stderr, want empty:" >&2
+            cat "$RUNNER_TEMP/help-stderr.txt" >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/help-expected.txt" <<'EOF'
+          Multi-Agent Model Advisor
+
+          Usage: multi-agent-model-advisor [-h | --help] [--version]
+
+          Options:
+            -h, --help     Show this help and exit.
+                --version  Print the version and exit.
+
+          Running without any option starts the interactive TUI shell.
+          The bootstrap screen does not load any project data.
+          Press q or Ctrl+C to quit.
+          EOF
+          if ! diff -u "$RUNNER_TEMP/help-expected.txt" "$RUNNER_TEMP/help-actual.txt"; then
+            echo "--help output differs from the expected stable text above" >&2
             exit 1
           fi
