@@ -43,6 +43,8 @@
     { "action": "shell", "resource": "rtk git rev-parse*", "effect": "allow" },
     { "action": "shell", "resource": "git ls-files*", "effect": "allow" },
     { "action": "shell", "resource": "rtk git ls-files*", "effect": "allow" },
+    { "action": "shell", "resource": "git ls-tree*", "effect": "allow" },
+    { "action": "shell", "resource": "rtk git ls-tree*", "effect": "allow" },
     { "action": "shell", "resource": "git blame*", "effect": "allow" },
     { "action": "shell", "resource": "rtk git blame*", "effect": "allow" },
     { "action": "shell", "resource": "git grep*", "effect": "allow" },

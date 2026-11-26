@@ -32,5 +32,6 @@ PASS reports: synthetic reports reconcile with the exact expected gaps and escal
 ADR baseline (merged, accepted): []
 ADR proposal: ADR-0001 declared=Accepted effective=Proposed
 ADR proposal: ADR-0002 declared=Accepted effective=Proposed
+ADR proposal: ADR-0003 declared=Accepted effective=Proposed
 PASS adr: open pull-request ADRs remain proposals and do not change the baseline
 All workflow checks passed.

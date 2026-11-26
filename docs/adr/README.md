@@ -108,11 +108,17 @@ on the existing baseline.
 
 ## Initial records
 
-The first two ADRs are introduced by the workflow change for issue #30. While
-that pull request is open they are proposals under the rule above; they become
-part of the baseline when a human approves and merges the pull request.
+ADR-0001 and ADR-0002 are introduced by the workflow change for issue #30.
+ADR-0003 records the issue #27 bootstrap and was merged with PR #31, so the
+Go and Bubble Tea bootstrap decision is already in force on the default
+branch. The normalised ADR-0003 file follows this ADR directory convention
+only through this pull request: while that pull request is open the records
+below are proposals under the rule above, including ADR-0003 even though its
+decision is already in force, and they become part of the baseline when a
+human approves and merges the pull request.
 
 | ADR | Decision |
 | --- | --- |
 | `ADR-0001` | Use the reviewed issue #1 requirements as the initial architecture baseline |
 | `ADR-0002` | Adopt a project-specific multi-agent development workflow |
+| `ADR-0003` | Bootstrap with Go and Bubble Tea |

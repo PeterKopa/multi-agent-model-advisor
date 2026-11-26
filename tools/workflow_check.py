@@ -76,6 +76,7 @@ GIT_READ_COMMANDS = [
     "show",
     "rev-parse",
     "ls-files",
+    "ls-tree",
     "blame",
     "grep",
     "describe",

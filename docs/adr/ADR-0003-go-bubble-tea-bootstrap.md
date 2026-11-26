@@ -1,0 +1,77 @@
+---
+id: ADR-0003
+title: Bootstrap with Go and Bubble Tea
+status: Accepted
+date: 2026-11-26
+issues: [27]
+supersedes: []
+superseded-by: null
+conflicts-with: []
+---
+
+# Context
+
+Go and Bubble Tea as the implementation stack for a modular monolith are confirmed in [architecture.md](../architecture.md); the exact versions, module path, package boundaries and supported platforms were deliberately deferred to this bootstrap task. Issue #27 establishes the offline application foundation: an executable with `--help` and `--version`, and a minimal TUI shell with documented quit controls. Startup and tests must require no network, no credentials, no inference, no project scanning and no configuration changes. This record pins the bootstrap decisions made there. It does not design the versioned YAML project file (#28), the domain contracts (#29), providers, scoring, persistence or any integration; those follow in separate issues.
+
+# Decision
+
+## Supported platforms
+
+- darwin/arm64 — manually verified locally (build, unit tests, CLI behavior).
+- linux/amd64 (ubuntu-24.04) — target of the CI job; verified when the PR CI run is green.
+- All other GOOS/GOARCH combinations — including windows/\*, darwin on non-arm64, and linux on non-amd64 — are not claimed to be supported at this stage. No build matrix or runtime verification exists for them; platform support statements must be widened only after they are actually verified.
+
+## Versions and dependency pinning
+
+- Go 1.27.4 — the `go` directive in `go.mod` is the single source of truth; CI's `setup-go` reads that exact version from `go.mod` via `go-version-file` with `check-latest: false` (locally verified as go1.27.4 darwin/arm64).
+- charm.land/bubbletea/v2 v2.2.0 — stable release (verified stable on 2026-11-26 at <https://pkg.go.dev/charm.land/bubbletea/v2@v2.2.0>). The v2 API is used (`tea.KeyPressMsg`, `tea.Model` with a `View() tea.View` method, `tea.NewView`, and `Program.Run()` returning `(Model, error)`). Its module declares `go 1.26.0`, which 1.27.4 satisfies. It is imported with the conventional alias `tea`.
+- `go.mod` and `go.sum` are the dependency pins: one direct UI dependency plus its transitive closure, committed to the repository and verified with `go mod verify`. The build-test job enforces `GOFLAGS=-mod=readonly` for every module-consuming step it runs (the quality/security jobs use ordinary module resolution) and verifies `go mod tidy -diff` inside the online module-setup step so the pins cannot drift.
+- No other direct dependencies: no lipgloss or bubbles (styling/components), no YAML library, no database driver, no HTTP clients, no external services. Each of these belongs to later issues with their own verification.
+
+## Module path and executable
+
+- Module path: `github.com/PeterKopa/multi-agent-model-advisor` — the repository name.
+- Single executable: `cmd/multi-agent-model-advisor`. `main()` only calls `os.Exit(app.Run(os.Args[1:], os.Stdout, os.Stderr))`.
+- CLI contract: `-h`/`--help` prints stable help to stdout and exits 0 (help wins over `--version`); `--version` prints `multi-agent-model-advisor <version>` to stdout and exits 0; a failing stdout write for `--help`/`--version` reports `<program>: write help|version: <err>` to stderr (best effort) and exits 1; unknown flags or positional arguments print an error plus usage to stderr and exit 2; running without any option starts the TUI, whose exit code mirrors the TUI result (0 on success, 1 on error).
+- The default version is `dev`, overridable at link time with `-ldflags "-X github.com/PeterKopa/multi-agent-model-advisor/internal/app.version=<value>"`.
+
+## Package boundaries
+
+- `cmd/multi-agent-model-advisor` — process entry point only; no logic.
+- `internal/app` — CLI flag parsing, exit-code mapping and startup; owns the version string; composes the presentation layer and starts the TUI.
+- `internal/tui` — Bubble Tea presentation shell; an isolated leaf that must not import `internal/app` or any other internal package.
+- `internal/domain` intentionally does not exist in #27. The acceptance criterion "Separate presentation from domain and application packages" is satisfied without speculative empty packages: presentation and application are separate packages with a directed dependency (`cmd` → `internal/app` → `internal/tui`), and no domain logic exists yet to factor out. Issue #29 owns the domain contracts and will introduce the domain packages together with those contracts.
+- For this bootstrap, `internal/app` imports `internal/tui` and the Bubble Tea package to compose the program — the application layer composing the presentation layer. Composition stays one-directional, and the rule going forward is that future domain packages must never import Bubble Tea (`tea`): the dependency stays an application/presentation concern only.
+
+## Offline and side-effect guarantees
+
+- At runtime and in tests, the application performs no network access, no inference, no credential access, no project scanning and no configuration or file-system writes; `Init()` returns `nil`, so the model starts no commands, timers or I/O. The only keyboard events it acts on are the documented quit controls (`q`, `Ctrl+C`).
+- The only network touchpoints of the application while developing or building are the Go toolchain and module setup (`go mod download` plus `go mod tidy -diff`) as build-time setup; tidy runs online because `go mod download` alone does not fetch the transitive test dependencies of dependencies that tidy must load on a fresh cache. CI's build-test job performs that single online setup step and then enforces `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly` for module verification, format checks, vetting, race tests and the build. build-test is therefore not whole-job offline (toolchain and module setup are online), but every project-level check after setup runs with Go module and toolchain resolution disabled.
+- CI additionally runs four separate quality/security jobs — golangci-lint, govulncheck, Trivy and jactionlint — as distinct jobs in the same workflow. These use the network deliberately on the CI machine to download their pinned tools, linters and scan/verify databases; jactionlint then lints with its own checks offline (`online: 'false'`). This tooling traffic is CI's own, not the application's: it does not change, weaken or strengthen the runtime offline guarantee above, and these jobs deliberately run with ordinary module resolution instead of build-test's offline settings.
+- Disabled module/toolchain resolution is not the same as network isolation. `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` stop the Go toolchain from resolving modules and toolchains; they do not sandbox the OS network and do not by themselves prove that no socket is opened. The runtime offline property rests on code inspection (this bootstrap contains no network code, no HTTP or dialing calls) and on side-effect-free tests. An earlier draft of this ADR referenced separately recorded manual network-denial evidence (a network-denied run) from the issue discussion; that could not be substantiated in review — an independent reviewer was unable to impose an OS-level network sandbox on the running program on macOS 27.2.1 — so no such claim is made here, and neither CI nor this ADR establishes OS network isolation.
+- The quit controls are documented both in the screen itself and in `--help` output (`Press q or Ctrl+C to quit.`).
+
+# Consequences
+
+- A concrete, continuously enforced foundation exists: exact versions, module path, CLI contract and package boundaries are pinned and checked in the build-test job (format, vet, race tests, module verify/tidy, offline build, `--version`/`--help` assertions), reinforced by four separate CI jobs for golangci-lint, govulncheck, Trivy vulnerability/secret/misconfiguration scanning and jactionlint workflow validation, so later issues extend the base instead of renegotiating it.
+- The quality/security jobs download their tools and databases over the network, so CI uses network access by design beyond the module-setup step; that is CI tooling traffic on CI machines and does not alter the application's offline runtime property. The offline-after-setup enforcement remains limited to the build-test job's steps.
+- The bootstrap stays minimal (two internal packages, one direct dependency). Later capabilities — YAML files, domain contracts, provider adapters, scoring, persistence — can each be added behind explicit interfaces with their own decision records.
+- Tests exercise the CLI contract and the TUI model directly through an injected `startTUI` seam; no PTY is opened and no Bubble Tea program is run in tests, keeping the suite fast and environment-free.
+- Risk: Bubble Tea v2 is a recent major version. Issues that add styling or components (lipgloss, bubbles) must verify v2 compatibility before adding dependencies.
+- Risk: users on platforms other than darwin/arm64 and linux/amd64 run untested builds; platform claims must be re-verified before being documented as supported.
+
+# Alternatives considered
+
+The original record, merged with PR #31, does not name rejected alternatives for the pinned versions, module path or package boundaries; the stack decision itself is documented in architecture.md. This section records that gap instead of inventing options after the fact.
+
+# Links
+
+- Issue: #27 (bootstrap). Issue #30 introduced the ADR directory convention that this record now follows.
+- Related ADRs: ADR-0001, ADR-0002.
+- Implementation or workflow: `go.mod`, `go.sum`, `cmd/multi-agent-model-advisor`, `internal/app`, `internal/tui`, `.github/workflows/ci.yml`, `README.md`.
+- Evidence: PR #31 and its CI runs.
+
+# Review notes
+
+- 2026-11-26: The decision was approved and merged with PR #31 and is in force on the default branch.
+- 2026-11-26: The record was renamed from `docs/adr/0001-go-bubble-tea-bootstrap.md` to `ADR-0003` and given frontmatter by PR #32 (issue #30) to follow the ADR directory convention; the decision text is unchanged.

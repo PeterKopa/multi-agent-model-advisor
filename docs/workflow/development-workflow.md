@@ -56,8 +56,8 @@ each subcommand; separators inside quoted wrapper arguments do not split.
 
 - **Git and GitHub by default.** `git *`, `gh *`, `rtk git *` and `rtk gh *` are
   denied first. Read-only inspection (status, diff, log, show, rev-parse,
-  ls-files, blame, grep, describe, shortlog, merge-base, and the read-only `gh`
-  subcommands) is re-enabled in both plain and RTK form. The Git Manager
+  ls-files, ls-tree, blame, grep, describe, shortlog, merge-base, and the
+  read-only `gh` subcommands) is re-enabled in both plain and RTK form. The Git Manager
   appends allow rules for the write commands it owns — including the RTK
   mirrors `rtk git add/branch/checkout/commit/push/switch` and
   `rtk gh pr create` — and repeats the protected denials **after** its allows so
