@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — implemented as part of issue #27, dated 2026-11-26.
+In Review — proposed for issue #27, dated 2026-11-26. This ADR becomes Accepted only after explicit human approval and merge into the default branch; versions in open pull requests remain proposals (see #30).
 
 ## Context
 
@@ -39,7 +39,8 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 ## Offline and side-effect guarantees
 
 - At runtime and in tests, the application performs no network access, no inference, no credential access, no project scanning and no configuration or file-system writes; `Init()` returns `nil`, so the model starts no commands, timers or I/O. The only keyboard events it acts on are the documented quit controls (`q`, `Ctrl+C`).
-- The only network touchpoints while developing or building are the Go toolchain and module setup (`go mod download` plus `go mod tidy -diff`) as build-time setup; tidy runs online because `go mod download` alone does not fetch the transitive test dependencies of dependencies that tidy must load on a fresh cache. CI performs that single online setup step and then enforces `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly` for module verification, format checks, vetting, race tests and the build. CI is therefore not whole-job offline (toolchain and module setup are online), but every project-level check after setup runs offline.
+- The only network touchpoints while developing or building are the Go toolchain and module setup (`go mod download` plus `go mod tidy -diff`) as build-time setup; tidy runs online because `go mod download` alone does not fetch the transitive test dependencies of dependencies that tidy must load on a fresh cache. CI performs that single online setup step and then enforces `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly` for module verification, format checks, vetting, race tests and the build. CI is therefore not whole-job offline (toolchain and module setup are online), but every project-level check after setup runs with Go module and toolchain resolution disabled.
+- Disabled module/toolchain resolution is not the same as network isolation. `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` stop the Go toolchain from resolving modules and toolchains; they do not sandbox the OS network and do not by themselves prove that no socket is opened. The runtime offline property rests on code inspection (this bootstrap contains no network code, no HTTP or dialing calls), on side-effect-free tests, and on separately recorded manual network-denial evidence — an interactive PTY smoke check and a network-denied run, recorded in the issue #27 PR discussion. CI itself is not whole-job offline (the module setup step is online) and is not an OS-level network sandbox.
 - The quit controls are documented both in the screen itself and in `--help` output (`Press q or Ctrl+C to quit.`).
 
 ## Consequences and rationale

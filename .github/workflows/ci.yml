@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs of the same PR/branch so queued runs do not pile up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: Build and test (offline after module setup)
@@ -16,19 +21,28 @@ jobs:
     timeout-minutes: 10
     env:
       # Every project-level step after the module setup step below (download
-      # plus tidiness verification) runs fully offline.
+      # plus tidiness verification) runs with Go module and toolchain
+      # resolution disabled.
+      #
+      # GOTOOLCHAIN=local, GOPROXY=off and GOSUMDB=off disable the Go
+      # toolchain/module resolution only. They are NOT an OS network sandbox:
+      # they do not block other sockets, and a passing job does not by itself
+      # prove that no network connection was opened. Runtime offline behavior
+      # rests on code inspection (no network code in this bootstrap) and is
+      # separately backed by manual network-denial evidence recorded in the
+      # PR discussion for issue #27.
       GOTOOLCHAIN: local
       GOPROXY: off
       GOSUMDB: off
       GOFLAGS: -mod=readonly
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Go 1.27.4
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: '1.27.4'
           check-latest: false

@@ -8,7 +8,7 @@ This repository is at an early bootstrap stage (issue #27). What exists today:
 
 - an executable with `--help` and `--version`,
 - a minimal Bubble Tea shell screen with documented quit controls,
-- offline build and offline tests, with CI running its checks offline after one module-setup step.
+- offline build and offline tests once the module setup is done, with CI running its project-level checks with Go module/toolchain resolution disabled after one module-setup step.
 
 Not implemented yet: model recommendations, YAML project files (#28), domain contracts (#29), provider adapters, quality scoring, inference, persistence or databases, and no external services of any kind. The delivery plan is described in [docs/roadmap.md](docs/roadmap.md).
 
@@ -25,7 +25,14 @@ Not implemented yet: model recommendations, YAML project files (#28), domain con
 ## Setup/build-time network versus runtime offline
 
 - The Go toolchain and the module setup (the module download plus the `go mod tidy -diff` verification, or the first `go get`/`go test` after a fresh clone) need network once — that is build-time setup, not a runtime feature.
-- At runtime the program is fully offline: it makes no network connections, needs no credentials, performs no inference, scans no projects and changes no configuration. CI verifies the offline property after the single online module-setup step (`go mod download` plus `go mod tidy -diff`), running every project-level check after it with `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly`.
+- At runtime the program is fully offline: it makes no network connections, needs no credentials, performs no inference, scans no projects and changes no configuration. CI verifies the project-level checks after the single online module-setup step (`go mod download` plus `go mod tidy -diff`), running them with `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly`, which disables Go module/toolchain resolution.
+- These Go settings are not an OS-level network sandbox: CI does not prove network isolation by itself. See [Network isolation evidence](#network-isolation-evidence) below.
+
+## Network isolation evidence
+
+- CI is not an OS network sandbox. `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` disable the Go toolchain's module and toolchain resolution only; they do not block other sockets and do not prove that no connection was opened.
+- Runtime offline behavior instead rests on code inspection (the bootstrap contains no network code, no HTTP or dialing calls) and side-effect-free tests.
+- Separately recorded manual evidence — an interactive PTY smoke check and a run with network access denied — lives in the PR discussion for issue #27. Application startup has no network code by inspection and test design.
 
 ## Build, test and verify
 
@@ -91,4 +98,4 @@ Packages, with dependency direction `cmd` → `internal/app` → `internal/tui`:
 
 ## CI and privacy
 
-CI (`.github/workflows/ci.yml`) runs one online module-setup step (`go mod download` plus `go mod tidy -diff`) and then enforces, offline: module integrity (`go mod verify`), formatting, vetting, race-tested unit tests, the build and the CLI's exact `--version`/`--help` contract. Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.
+CI (`.github/workflows/ci.yml`) runs one online module-setup step (`go mod download` plus `go mod tidy -diff`) and then runs module integrity (`go mod verify`), formatting, vetting, race-tested unit tests, the build and the CLI's exact `--version`/`--help` contract with Go module/toolchain resolution disabled (`GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`). That is not an OS-level network sandbox, and CI does not prove offline/network isolation by itself; see [Network isolation evidence](#network-isolation-evidence). Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.
