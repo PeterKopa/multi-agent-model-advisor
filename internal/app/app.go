@@ -58,7 +58,9 @@ func run(args []string, stdout, stderr io.Writer, startTUI func(io.Writer) error
 	fs := flag.NewFlagSet(programName, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprint(stderr, usageText)
+		// The usage line is informational output to an already-handled
+		// stream; a write error there must not mask the usage error itself.
+		_, _ = fmt.Fprint(stderr, usageText)
 	}
 
 	var showHelp, showVersion bool
@@ -73,7 +75,7 @@ func run(args []string, stdout, stderr io.Writer, startTUI func(io.Writer) error
 	}
 
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "%s: unexpected positional argument(s): %s\n", programName, strings.Join(fs.Args(), " "))
+		_, _ = fmt.Fprintf(stderr, "%s: unexpected positional argument(s): %s\n", programName, strings.Join(fs.Args(), " "))
 		fs.Usage()
 		return 2
 	}
@@ -81,15 +83,15 @@ func run(args []string, stdout, stderr io.Writer, startTUI func(io.Writer) error
 	switch {
 	case showHelp:
 		// Help wins over --version when both are requested.
-		fmt.Fprint(stdout, helpText)
+		_, _ = fmt.Fprint(stdout, helpText)
 		return 0
 	case showVersion:
-		fmt.Fprintf(stdout, "%s %s\n", programName, version)
+		_, _ = fmt.Fprintf(stdout, "%s %s\n", programName, version)
 		return 0
 	}
 
 	if err := startTUI(stdout); err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", programName, err)
+		_, _ = fmt.Fprintf(stderr, "%s: %v\n", programName, err)
 		return 1
 	}
 	return 0

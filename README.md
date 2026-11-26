@@ -30,11 +30,24 @@ Not implemented yet: model recommendations, YAML project files (#28), domain con
 
 ## Network isolation evidence
 
-- CI is not an OS network sandbox. `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` disable the Go toolchain's module and toolchain resolution only; they do not block other sockets and do not prove that no connection was opened.
-- Runtime offline behavior instead rests on code inspection (the bootstrap contains no network code, no HTTP or dialing calls) and side-effect-free tests.
-- Separately recorded manual evidence — an interactive PTY smoke check and a run with network access denied — lives in the PR discussion for issue #27. Application startup has no network code by inspection and test design.
+- CI is not an OS network sandbox. In the build-test job, `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` disable the Go toolchain's module and toolchain resolution only; they do not block other sockets and do not prove that no connection was opened.
+- The ci.yml workflow contains five separate jobs. Build-and-test is the only job with project-level offline enforcement (after its module-setup step); the lint, govulncheck, Trivy and jactionlint jobs use the network deliberately to download tools, linters and scan/verify databases on the CI machine. That tooling traffic belongs to CI, not to the application, and does not change the application's runtime offline property.
+- Runtime offline behavior rests on code inspection (the bootstrap contains no network code — no HTTP or dialing calls) and side-effect-free unit tests. CI does not prove OS-level network isolation: no reproducible OS-level network-sandbox experiment on a running program exists for this project (a reviewer attempt to impose one on macOS 27.2.1 did not succeed and is not claimed as evidence). No claim of OS network isolation is made here.
+- A startup PTY smoke check of the program is recorded in the issue #27 PR discussion; it exercised CLI behavior only and is not evidence of network isolation. Application startup has no network code by inspection and test design.
 
 ## Build, test and verify
+
+CI runs five separate jobs (each its own job, never a step inside another):
+
+| CI job | Network use on CI |
+| --- | --- |
+| Build and test (offline after module setup) | one online module-setup step (`go mod download` + `go mod tidy -diff`); all following steps run with Go module/toolchain resolution disabled |
+| Lint (golangci-lint) | downloads the pinned golangci-lint v2.15.0 binary |
+| Vulnerability check (govulncheck) | downloads govulncheck v1.10.0 (module proxy) and the vulnerability DB |
+| Security scan (Trivy) | downloads the Trivy v0.76.2 binary and its DB |
+| Workflow lint (jactionlint) | downloads the pinned jactionlint v2.6.0 binary, then lints locally (`online: 'false'`) |
+
+The local equivalents, all currently passing:
 
 ```sh
 go build ./...
@@ -58,6 +71,16 @@ export GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly
 go mod verify
 go test -race -count=1 ./...
 gofmt -l cmd internal   # must print nothing
+```
+
+Separate quality/security checks (run by their own CI jobs, not by build-test; the tools are downloaded over the network):
+
+```sh
+mise x golangci-lint@2.15.0 -- golangci-lint run ./...
+go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+"$(go env GOPATH)/bin/govulncheck" ./...
+mise x trivy@0.76.2 -- trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --quiet .
+mise x jactionlint@2.6.0 -- jactionlint
 ```
 
 ## Run
@@ -98,4 +121,4 @@ Packages, with dependency direction `cmd` → `internal/app` → `internal/tui`:
 
 ## CI and privacy
 
-CI (`.github/workflows/ci.yml`) runs one online module-setup step (`go mod download` plus `go mod tidy -diff`) and then runs module integrity (`go mod verify`), formatting, vetting, race-tested unit tests, the build and the CLI's exact `--version`/`--help` contract with Go module/toolchain resolution disabled (`GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`). That is not an OS-level network sandbox, and CI does not prove offline/network isolation by itself; see [Network isolation evidence](#network-isolation-evidence). Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.
+CI (`.github/workflows/ci.yml`) runs five separate jobs: the **build-and-test** job — one online module-setup step (`go mod download` plus `go mod tidy -diff`) and then module integrity (`go mod verify`), formatting, vetting, race-tested unit tests, the offline build and the CLI's exact `--version`/`--help` contract, all with Go module/toolchain resolution disabled (`GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOFLAGS=-mod=readonly`) — plus four separate quality/security jobs that may use the network on the CI machine to download their pinned tools and databases: **Lint (golangci-lint)** v2.15.0, **Vulnerability check (govulncheck)** v1.10.0, **Security scan (Trivy)** v0.76.2 and **Workflow lint (jactionlint)** v2.6.0. Those downloads are CI tooling traffic and do not change the application's runtime offline guarantee. The offline-enforcement settings are not an OS-level network sandbox, and CI does not prove offline/network isolation by itself; see [Network isolation evidence](#network-isolation-evidence). Consistent with the project's privacy goals ([docs/privacy-and-policies.md](docs/privacy-and-policies.md)), the current bootstrap performs no inference, touches no credentials, scans or writes no project files and changes no configuration.

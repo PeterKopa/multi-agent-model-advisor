@@ -26,11 +26,11 @@ jobs:
       #
       # GOTOOLCHAIN=local, GOPROXY=off and GOSUMDB=off disable the Go
       # toolchain/module resolution only. They are NOT an OS network sandbox:
-      # they do not block other sockets, and a passing job does not by itself
-      # prove that no network connection was opened. Runtime offline behavior
-      # rests on code inspection (no network code in this bootstrap) and is
-      # separately backed by manual network-denial evidence recorded in the
-      # PR discussion for issue #27.
+      # They do not sandbox the OS network and do not by themselves prove
+      # that no network connection was opened. Runtime offline behavior
+      # rests on code inspection (no network code in this bootstrap) and
+      # side-effect-free tests; see the ADR for the honest statement of
+      # what CI does and does not prove.
       GOTOOLCHAIN: local
       GOPROXY: off
       GOSUMDB: off
@@ -127,3 +127,106 @@ jobs:
             echo "--help output differs from the expected stable text above" >&2
             exit 1
           fi
+
+  # Separate quality/security jobs. Each is its own job (not a step of
+  # build-test); all inherit the top-level permissions (contents: read) and
+  # the top-level concurrency group. Unlike build-test's project-level
+  # steps, these jobs run with ordinary module resolution and, where noted,
+  # use the network — that is CI tooling traffic on the CI machine, not a
+  # new property of the application, which stays offline at runtime.
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Network use: the action downloads the golangci-lint v2.15.0 binary
+      # from GitHub releases. That download is the only online step here.
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          args: --timeout=5m
+
+  govulncheck:
+    name: Vulnerability check (govulncheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Keep Go itself on the toolchain pinned by go.mod.
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Network use: downloading the govulncheck tool (Go module proxy) and
+      # the vulnerability database (vuln.go.dev).
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+
+      - name: Scan for known vulnerabilities
+        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
+
+  trivy:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Network use: the action downloads the Trivy v0.76.2 binary and its
+      # vulnerability database. Findings fail the job (exit-code 1).
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          version: v0.76.2
+          hide-progress: true
+
+  workflow-lint:
+    name: Workflow lint (jactionlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Network use: the action downloads the jactionlint binary (pinned to
+      # the action's own release), then lints the workflow files locally.
+      # online: 'false' keeps jactionlint's own checks off the network.
+      - name: Lint workflows
+        uses: jdx/jactionlint@72c00452809bcca05b8bc12acdcf15dd7a9c1c5e # v2.6.0
+        with:
+          online: 'false'
