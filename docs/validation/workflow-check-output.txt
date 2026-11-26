@@ -1,0 +1,34 @@
+PASS config: six agents, resolved permission boundaries, shared instructions, Git ownership and human-only merge are consistent
+ADR baseline (merged, accepted): ['ADR-0001']
+ADR proposal: ADR-0002 declared=Accepted effective=Proposed
+ADR escalation: ADR-0002 conflicts with ADR-0001
+PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+Acceptance-criteria ledger:
+Criterion  Status         Gaps                                   Delegated to
+AC-01      covered        -                                      planner
+AC-02      partial        -                                      planner
+AC-03      missing        delegated_unreported:planner           planner
+AC-04      covered        -                                      implementer
+AC-05      unverified     delegated_unreported:tester            tester
+AC-06      missing        delegated_unreported:orchestrator      orchestrator
+AC-07      missing        not_delegated                          -
+Gaps:
+  - follow_up:AC-02
+  - AC-03:delegated_unreported:planner
+  - follow_up:AC-03
+  - AC-05:delegated_unreported:tester
+  - follow_up:AC-05
+  - AC-06:delegated_unreported:orchestrator
+  - follow_up:AC-06
+  - AC-07:not_delegated
+  - follow_up:AC-07
+Escalations:
+  - adr:ADR-0002:conflicts:ADR-0001
+  - adr:ADR-0002:declared-accepted-in-open-pr
+  - report:reviewer:Needs Decision
+PASS reports: synthetic reports reconcile with gaps and escalations as expected
+ADR baseline (merged, accepted): []
+ADR proposal: ADR-0001 declared=Accepted effective=Proposed
+ADR proposal: ADR-0002 declared=Accepted effective=Proposed
+PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+All workflow checks passed.

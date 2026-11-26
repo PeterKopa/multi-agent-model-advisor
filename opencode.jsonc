@@ -1,0 +1,62 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // The Orchestrator coordinates the workflow. The five specialist agents run
+  // as subagents in child sessions.
+  "default_agent": "orchestrator",
+
+  // Shared instructions are added to every session after AGENTS.md. Agent
+  // definitions stay in .opencode/agents/ and are discovered automatically.
+  "instructions": ["docs/workflow/feedback-contract.md"],
+
+  // Git and GitHub write operations belong to the Git Manager. Project-wide
+  // rules deny all Git/GitHub commands by default, then re-enable read-only
+  // inspection. The Git Manager appends explicit allow rules for the write
+  // commands it owns. Last matching rule wins.
+  "permissions": [
+    { "action": "shell", "resource": "git *", "effect": "deny" },
+    { "action": "shell", "resource": "gh *", "effect": "deny" },
+    { "action": "shell", "resource": "gh pr merge*", "effect": "deny" },
+
+    { "action": "shell", "resource": "git status*", "effect": "allow" },
+    { "action": "shell", "resource": "git diff*", "effect": "allow" },
+    { "action": "shell", "resource": "git log*", "effect": "allow" },
+    { "action": "shell", "resource": "git show*", "effect": "allow" },
+    { "action": "shell", "resource": "git rev-parse*", "effect": "allow" },
+    { "action": "shell", "resource": "git ls-files*", "effect": "allow" },
+    { "action": "shell", "resource": "git blame*", "effect": "allow" },
+    { "action": "shell", "resource": "git grep*", "effect": "allow" },
+    { "action": "shell", "resource": "git describe*", "effect": "allow" },
+    { "action": "shell", "resource": "git shortlog*", "effect": "allow" },
+    { "action": "shell", "resource": "git merge-base*", "effect": "allow" },
+
+    { "action": "shell", "resource": "gh pr view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr diff*", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr checks*", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr list*", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue list*", "effect": "allow" },
+    { "action": "shell", "resource": "gh run view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh run list*", "effect": "allow" },
+    { "action": "shell", "resource": "gh workflow view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh workflow list*", "effect": "allow" },
+    { "action": "shell", "resource": "gh repo view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh release view*", "effect": "allow" },
+    { "action": "shell", "resource": "gh release list*", "effect": "allow" },
+
+    { "action": "shell", "resource": "gh api*", "effect": "deny" }
+  ],
+
+  // Optional project-local model assignments. Uncomment and edit individual
+  // entries when this repository needs a pinned model. Unset agents inherit
+  // their model from the global OpenCode configuration or the parent session.
+  //
+  // "agents": {
+  //   "orchestrator": { "model": "provider/model#variant" },
+  //   "planner": { "model": "provider/model#variant" },
+  //   "reviewer": { "model": "provider/model#variant" },
+  //   "implementer": { "model": "provider/model#variant" },
+  //   "tester": { "model": "provider/model#variant" },
+  //   "git-manager": { "model": "provider/model#variant" }
+  // }
+}

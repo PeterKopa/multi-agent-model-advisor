@@ -1,0 +1,40 @@
+{
+  "issue": 30,
+  "criteria": [
+    {
+      "id": "AC-01",
+      "title": "Define the Orchestrator and five specialist subagents",
+      "delegated_to": ["planner"]
+    },
+    {
+      "id": "AC-02",
+      "title": "Establish role boundaries and capability-based permissions",
+      "delegated_to": ["planner"]
+    },
+    {
+      "id": "AC-03",
+      "title": "Document the ADR lifecycle and baseline rules",
+      "delegated_to": ["planner"]
+    },
+    {
+      "id": "AC-04",
+      "title": "Establish the shared structured feedback contract",
+      "delegated_to": ["implementer"]
+    },
+    {
+      "id": "AC-05",
+      "title": "Verify configuration discovery with OpenCode v2.4.1",
+      "delegated_to": ["tester"]
+    },
+    {
+      "id": "AC-06",
+      "title": "Maintain the consolidated acceptance-criteria ledger",
+      "delegated_to": ["orchestrator"]
+    },
+    {
+      "id": "AC-07",
+      "title": "Publish the complete development workflow documentation",
+      "delegated_to": []
+    }
+  ]
+}
