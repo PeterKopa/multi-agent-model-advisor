@@ -1,0 +1,29 @@
+{
+  "description": "Positive control for the AC-PL1 right-sized work-item schema. The nine factors, an independently verifiable outcome and a named-human approval for a material scope change are required. No numeric file, line or criterion threshold is part of the rule.",
+  "work_item": {
+    "id": "WI-CO",
+    "criteria": ["AC-PL1", "AC-CX1", "AC-WO1"],
+    "outcome": "Right-sized planning, one canonical delegation packet and deterministic ownership and handover cases",
+    "independently_verifiable": true,
+    "factors": {
+      "cohesion": "Coordination and ownership are one contract; evidence and reconciliation stay in WI-EV.",
+      "dependencies": "WI-EV supplies the report schema; WI-CI later supplies the required CI evidence.",
+      "complexity": "Three focused work items avoid nine fixture migrations and repeated review points.",
+      "architectural_impact": "Amends the unmerged ADR-0002 workflow proposal; no accepted baseline change.",
+      "side_effects": "New validator guards and fixtures; no production code and no permission change.",
+      "testability": "Deterministic offline fixtures prove every new guard with in-memory mutations.",
+      "agent_context": "One packet per work item keeps the context focused and reconstructable.",
+      "coordination_overhead": "One serial mutation path with three review points instead of nine.",
+      "ai_human_review_effort": "Focused AI review and testing per item, then one integrated human review."
+    },
+    "split_recommendation": "keep",
+    "scope_change": {
+      "material": true,
+      "approval": {
+        "required": true,
+        "approved_by": "human",
+        "reference": "issue #30 scope comments on PR #32, 2026-11-26"
+      }
+    }
+  }
+}

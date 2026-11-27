@@ -1,0 +1,37 @@
+{
+  "description": "Invalid report fixture: the newer implementer report supersedes the older implementer report. The superseded covered claim is dropped from reconciliation, so the criterion keeps the newer unverified status instead of the stale covered claim.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "implementer": ["issue-30-implementation", "issue-30-implementation-r2"]
+  },
+  "reports": ["reports/implementer-old.json", "reports/implementer-new.json"],
+  "expected": {
+    "ledger": {
+      "AC-01": "missing",
+      "AC-02": "missing",
+      "AC-03": "missing",
+      "AC-04": "unverified",
+      "AC-05": "missing",
+      "AC-06": "missing",
+      "AC-07": "missing"
+    },
+    "gaps": [
+      "AC-01:delegated_unreported:planner",
+      "AC-02:delegated_unreported:planner",
+      "AC-03:delegated_unreported:planner",
+      "AC-05:delegated_unreported:tester",
+      "AC-06:delegated_unreported:orchestrator",
+      "AC-07:not_delegated",
+      "follow_up:AC-01",
+      "follow_up:AC-02",
+      "follow_up:AC-03",
+      "follow_up:AC-04",
+      "follow_up:AC-05",
+      "follow_up:AC-06",
+      "follow_up:AC-07"
+    ],
+    "escalations": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "description": "A human-attributed review without PR-review or owner-record provenance cannot be verified as an independent human review.",
+  "release_remove": [
+    "human_review.provenance"
+  ],
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "human_review:missing-provenance"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "description": "A passed CI state without inspected run/job/step/log evidence is not green.",
+  "release_patch": {
+    "workflow_validator_ci": {
+      "inspected": false
+    }
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "workflow_validator_ci:not-inspected"
+    ]
+  }
+}

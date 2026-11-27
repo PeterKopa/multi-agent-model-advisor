@@ -14,7 +14,7 @@ Not implemented yet: model recommendations, YAML project files (#28), domain con
 
 ## Prerequisites
 
-- Go 1.27.4 (the exact version pinned in `go.mod`; rationale in the [ADR](docs/adr/0001-go-bubble-tea-bootstrap.md)).
+- Go 1.27.4 (the exact version pinned in `go.mod`; rationale in the [ADR](docs/adr/ADR-0003-go-bubble-tea-bootstrap.md)).
 
 ## Supported platforms
 
@@ -115,7 +115,7 @@ CI builds the same way with the injected value `ci-test` and asserts the exact `
 
 ## Architecture and packages
 
-Bootstrap decisions (versions, platforms, boundaries): [docs/adr/0001-go-bubble-tea-bootstrap.md](docs/adr/0001-go-bubble-tea-bootstrap.md).
+Bootstrap decisions (versions, platforms, boundaries): [docs/adr/ADR-0003-go-bubble-tea-bootstrap.md](docs/adr/ADR-0003-go-bubble-tea-bootstrap.md).
 Overall implementation architecture: [docs/architecture.md](docs/architecture.md).
 
 Packages, with dependency direction `cmd` → `internal/app` → `internal/tui`:

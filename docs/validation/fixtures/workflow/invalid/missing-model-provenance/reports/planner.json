@@ -1,0 +1,35 @@
+{
+  "agent": "planner",
+  "issue": 30,
+  "task_id": "issue-30-planning",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
+  "status": "Completed",
+  "completed_work": [
+    "Prepared the acceptance-criteria plan, but omitted the required provenance fields."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-01",
+      "coverage": "covered",
+      "evidence": ["docs/workflow/development-workflow.md"],
+      "notes": "Valid shape apart from the missing provenance."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

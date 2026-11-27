@@ -1,0 +1,12 @@
+{
+  "description": "The live release record omits the required Tester verification slot. A missing gate is unavailable, not implied by the other gates, and must block release.",
+  "release_remove": [
+    "tester_verification"
+  ],
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "tester_verification:missing"
+    ]
+  }
+}

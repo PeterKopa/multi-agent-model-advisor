@@ -1,0 +1,15 @@
+{
+  "description": "Invalid report fixture: structured evidence without an artifact reference carries no content, so the covered claim is rejected with a message naming the missing artifact instead of a generic empty-evidence message.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "implementer": "issue-30-implementation"
+  },
+  "reports": [
+    "reports/implementer.json"
+  ],
+  "invalid": {
+    "error": "must name a non-empty 'artifact'"
+  }
+}

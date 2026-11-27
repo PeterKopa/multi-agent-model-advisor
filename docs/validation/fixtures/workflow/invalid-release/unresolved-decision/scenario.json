@@ -1,0 +1,18 @@
+{
+  "description": "A required open decision forces release_ready=false regardless of the otherwise green evidence.",
+  "release_patch": {
+    "decisions": [
+      {
+        "id": "OD-ROLE",
+        "required": true,
+        "state": "open"
+      }
+    ]
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "decision-open:OD-ROLE"
+    ]
+  }
+}

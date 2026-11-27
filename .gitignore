@@ -1,2 +1,14 @@
+__pycache__/
+*.pyc
+.DS_Store
+.tmp/
+.env
+.env.*
+!.env.example
+opencode.local.jsonc
+opencode.local.json
+*.local.json
+*.local.jsonc
+
 # Built binary produced by `go build -o multi-agent-model-advisor ./cmd/multi-agent-model-advisor`.
 /multi-agent-model-advisor

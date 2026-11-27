@@ -1,0 +1,24 @@
+{
+  "description": "Explicit handover: the first task stopped writing and handed the same file over to the second task, which is now the only active writer. The overlap is allowed because the predecessor is no longer active.",
+  "active_tasks": ["task-a", "task-b"],
+  "records": [
+    {
+      "task_id": "task-a",
+      "agent": "implementer",
+      "status": "handed-over",
+      "write_scope": ["tools/workflow_check.py"],
+      "scratch": ".tmp/task-a/",
+      "dependencies": [],
+      "handover": {"to": "task-b", "reference": "issue-30 handover packet"}
+    },
+    {
+      "task_id": "task-b",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": ["tools/workflow_check.py"],
+      "scratch": ".tmp/task-b/",
+      "dependencies": ["task-a"]
+    }
+  ],
+  "expected_blockers": []
+}

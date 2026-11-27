@@ -1,0 +1,14 @@
+{
+  "description": "A plan review recorded against a different commit than the frozen reviewed commit does not bind to the reviewed plan.",
+  "release_patch": {
+    "plan_review": {
+      "commit": "0000000000000000000000000000000000000000"
+    }
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "plan_review:commit-mismatch"
+    ]
+  }
+}

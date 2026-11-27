@@ -1,12 +1,19 @@
-# ADR 0001: Bootstrap with Go and Bubble Tea
+---
+id: ADR-0003
+title: Bootstrap with Go and Bubble Tea
+status: Accepted
+date: 2026-11-26
+issues: [27]
+supersedes: []
+superseded-by: null
+conflicts-with: []
+---
 
-## Status
-
-In Review — proposed for issue #27, dated 2026-11-26. This ADR becomes Accepted only after explicit human approval and merge into the default branch; versions in open pull requests remain proposals (see #30).
-
-## Context
+# Context
 
 Go and Bubble Tea as the implementation stack for a modular monolith are confirmed in [architecture.md](../architecture.md); the exact versions, module path, package boundaries and supported platforms were deliberately deferred to this bootstrap task. Issue #27 establishes the offline application foundation: an executable with `--help` and `--version`, and a minimal TUI shell with documented quit controls. Startup and tests must require no network, no credentials, no inference, no project scanning and no configuration changes. This record pins the bootstrap decisions made there. It does not design the versioned YAML project file (#28), the domain contracts (#29), providers, scoring, persistence or any integration; those follow in separate issues.
+
+# Decision
 
 ## Supported platforms
 
@@ -44,7 +51,7 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 - Disabled module/toolchain resolution is not the same as network isolation. `GOPROXY=off`, `GOSUMDB=off` and `GOTOOLCHAIN=local` stop the Go toolchain from resolving modules and toolchains; they do not sandbox the OS network and do not by themselves prove that no socket is opened. The runtime offline property rests on code inspection (this bootstrap contains no network code, no HTTP or dialing calls) and on side-effect-free tests. An earlier draft of this ADR referenced separately recorded manual network-denial evidence (a network-denied run) from the issue discussion; that could not be substantiated in review — an independent reviewer was unable to impose an OS-level network sandbox on the running program on macOS 27.2.1 — so no such claim is made here, and neither CI nor this ADR establishes OS network isolation.
 - The quit controls are documented both in the screen itself and in `--help` output (`Press q or Ctrl+C to quit.`).
 
-## Consequences and rationale
+# Consequences
 
 - A concrete, continuously enforced foundation exists: exact versions, module path, CLI contract and package boundaries are pinned and checked in the build-test job (format, vet, race tests, module verify/tidy, offline build, `--version`/`--help` assertions), reinforced by four separate CI jobs for golangci-lint, govulncheck, Trivy vulnerability/secret/misconfiguration scanning and jactionlint workflow validation, so later issues extend the base instead of renegotiating it.
 - The quality/security jobs download their tools and databases over the network, so CI uses network access by design beyond the module-setup step; that is CI tooling traffic on CI machines and does not alter the application's offline runtime property. The offline-after-setup enforcement remains limited to the build-test job's steps.
@@ -52,3 +59,20 @@ Go and Bubble Tea as the implementation stack for a modular monolith are confirm
 - Tests exercise the CLI contract and the TUI model directly through an injected `startTUI` seam; no PTY is opened and no Bubble Tea program is run in tests, keeping the suite fast and environment-free.
 - Risk: Bubble Tea v2 is a recent major version. Issues that add styling or components (lipgloss, bubbles) must verify v2 compatibility before adding dependencies.
 - Risk: users on platforms other than darwin/arm64 and linux/amd64 run untested builds; platform claims must be re-verified before being documented as supported.
+
+# Alternatives considered
+
+The original record, merged with PR #31, does not name rejected alternatives for the pinned versions, module path or package boundaries; the stack decision itself is documented in architecture.md. This section records that gap instead of inventing options after the fact.
+
+# Links
+
+- Issue: #27 (bootstrap). Issue #30 introduced the ADR directory convention that this record now follows.
+- Related ADRs: ADR-0001, ADR-0002.
+- Implementation or workflow: `go.mod`, `go.sum`, `cmd/multi-agent-model-advisor`, `internal/app`, `internal/tui`, `.github/workflows/ci.yml`, `README.md`.
+- Evidence: PR #31 and its CI runs.
+
+# Review notes
+
+- 2026-11-26: The decision was approved and merged with PR #31 and is in force on the default branch.
+- 2026-11-26: The record was renamed from `docs/adr/0001-go-bubble-tea-bootstrap.md` to `ADR-0003` and given frontmatter by PR #32 (issue #30) to follow the ADR directory convention; the decision text is unchanged.
+- 2026-11-26: During the PR #32 review the repository owner explicitly confirmed `status: Accepted`; the confirmation is recorded in the PR #32 review thread and in `docs/workflow/ledgers/issue-30.md` (`P1 (external R-2)`): the bootstrap decision has been in force on the default branch since PR #31, and PR #32 only normalises the file name and frontmatter of this record.

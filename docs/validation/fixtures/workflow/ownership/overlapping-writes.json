@@ -1,0 +1,25 @@
+{
+  "description": "Two active implementation tasks claim the same file. Overlapping writes must be serialised, so the ownership check reports the shared path.",
+  "active_tasks": ["task-a", "task-b"],
+  "records": [
+    {
+      "task_id": "task-a",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": ["tools/workflow_check.py"],
+      "scratch": ".tmp/task-a/",
+      "dependencies": []
+    },
+    {
+      "task_id": "task-b",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": ["tools/workflow_check.py"],
+      "scratch": ".tmp/task-b/",
+      "dependencies": []
+    }
+  ],
+  "expected_blockers": [
+    "write-ownership:overlap:tools/workflow_check.py:implementer:implementer"
+  ]
+}

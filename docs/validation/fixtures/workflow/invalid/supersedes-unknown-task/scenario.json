@@ -1,0 +1,14 @@
+{
+  "description": "Invalid report fixture: the reviewer report supersedes a task id the scenario never declares. Supersession must name a declared task of the same agent, so the phantom target is rejected instead of dropping nothing.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "implementer": "issue-30-implementation",
+    "reviewer": "issue-30-plan-review"
+  },
+  "reports": ["reports/reviewer.json"],
+  "invalid": {
+    "error": "supersedes an unknown task"
+  }
+}

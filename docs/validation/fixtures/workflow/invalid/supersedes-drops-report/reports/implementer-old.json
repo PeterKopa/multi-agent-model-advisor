@@ -1,0 +1,37 @@
+{
+  "agent": "implementer",
+  "issue": 30,
+  "task_id": "issue-30-implementation",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
+  "status": "Completed",
+  "completed_work": [
+    "Superseded first-round implementation report."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "covered",
+      "evidence": ["docs/workflow/feedback-contract.md"],
+      "notes": "First-round claim that the newer report supersedes."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

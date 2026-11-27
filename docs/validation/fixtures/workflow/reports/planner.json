@@ -1,0 +1,46 @@
+{
+  "agent": "planner",
+  "issue": 30,
+  "task_id": "issue-30-planning",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
+  "status": "Completed",
+  "completed_work": [
+    "Prepared the acceptance-criteria plan and identified the agent configuration work.",
+    "Recorded the ADR baseline impact for ADR-0001."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-01",
+      "coverage": "covered",
+      "evidence": ["docs/workflow/development-workflow.md", ".opencode/agents/"],
+      "notes": "All six roles and their modes are named."
+    },
+    {
+      "criterion_id": "AC-02",
+      "coverage": "partial",
+      "evidence": ["opencode.jsonc"],
+      "notes": "Git write rules are planned; code review of the final permissions is pending."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": ["The default branch has no merged ADR baseline yet."],
+  "dependencies": ["Reviewer plan review"],
+  "adr_alignment": {
+    "baseline": ["ADR-0001"],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [
+    "Ask the Reviewer to review the plan before implementation."
+  ],
+  "feedback": {
+    "delegation": "The packet named the issue and constraints clearly.",
+    "planning": "Keep the ADR baseline check in the intake step.",
+    "instructions": "The feedback contract is sufficient for planning.",
+    "collaboration": "Clear ownership between planner, implementer and tester."
+  }
+}

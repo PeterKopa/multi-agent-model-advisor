@@ -1,0 +1,23 @@
+{
+  "description": "Stale ownership: task-a is still recorded as active and claims a write scope, but it is no longer in the active task list. The claim must be released before another task can proceed.",
+  "active_tasks": ["task-b"],
+  "records": [
+    {
+      "task_id": "task-a",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": ["tools/workflow_check.py"],
+      "scratch": ".tmp/task-a/",
+      "dependencies": []
+    },
+    {
+      "task_id": "task-b",
+      "agent": "orchestrator",
+      "status": "active",
+      "write_scope": ["docs/workflow/ledgers/issue-30.md"],
+      "scratch": ".tmp/task-b/",
+      "dependencies": ["task-a"]
+    }
+  ],
+  "expected_blockers": ["write-ownership:stale:task-a"]
+}

@@ -1,0 +1,88 @@
+PASS audit: workflow_check.py passed 6 static properties (imports and wildcard rejection, network modules, forbidden calls and spawn references, subprocess shape and verb pin, git verb pin, write access) across 11 imports, 1812 call sites, 1 subprocess sites and 3 git verbs
+PASS config: six agents, resolved permission boundaries, shared instructions, Git ownership and human-only merge are consistent
+ADR baseline (merged, accepted): ['ADR-0001']
+ADR proposal: ADR-0002 declared=Accepted effective=Proposed
+ADR escalation: ADR-0002 conflicts with ADR-0001
+PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+ADR baseline (merged, accepted): ['ADR-0001', 'ADR-0003']
+ADR proposal: ADR-0002 declared=Accepted effective=Proposed
+ADR proposal: ADR-0003 declared=Accepted effective=Proposed
+ADR escalation: ADR-0002 conflicts with ADR-0003
+PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+PASS adr in-memory fixtures: body-signature stability, unknown references, identifier collisions, non-accepted conflicts and open pull-request status mapping are enforced
+PASS permissions fixtures: over-broad allow rules are rejected and compliant agent rules pass
+PASS ledger structure in-memory fixtures: the well-formed control passes, a five-cell row names its line and both counts, the recorded edit payloads, the tool-call tail and the literal \n| escape fail, and missing, duplicated and out-of-order sections are rejected
+PASS reports in-memory fixtures: empty and sentinel-evidence covered claims stay unsupported, structured evidence identity is enforced, contradictory coverage values demote to unverified, unknown provenance is accepted while blank provenance is rejected, and self-, cross-agent, unknown and cyclic supersession is rejected
+PASS release gate in-memory fixtures: the synthetic all-green control evaluates true and 52 mutations each force false with their named blocker; this proves the evaluator only, never real release readiness
+release fixture ai-identity-human-slot: release_ready=false with the stated blockers
+release fixture contributor-reported-required-check: release_ready=false with the stated blockers
+release fixture head-mismatch: release_ready=false with the stated blockers
+release fixture missing-ai-review: release_ready=false with the stated blockers
+release fixture missing-human-provenance: release_ready=false with the stated blockers
+release fixture missing-human-review: release_ready=false with the stated blockers
+release fixture missing-required-gate: release_ready=false with the stated blockers
+release fixture pending-proposal: release_ready=false with the stated blockers
+release fixture skipped-required-check: release_ready=false with the stated blockers
+release fixture stale-plan-review: release_ready=false with the stated blockers
+release fixture uninspected-required-check: release_ready=false with the stated blockers
+release fixture unresolved-decision: release_ready=false with the stated blockers
+PASS release negative fixtures: 12 expected-false release cases assert the exact blockers inside the fixture harness
+PASS right-sized work item fixture: nine factors, an independently verifiable outcome and named-human approval for material scope changes are required; 20 mutations each fail their case and no rigid size threshold is encoded
+PASS delegation packet fixture: the canonical document carries every required field, the workflow and AGENTS.md link to it, and 23 mutations each fail their case; concision and context sufficiency remain human judgement
+ownership fixture disjoint-writes: no blockers
+ownership fixture overlapping-writes: ['write-ownership:overlap:tools/workflow_check.py:implementer:implementer']
+ownership fixture ownership-handover: no blockers
+ownership fixture read-only-write: ['write-ownership:read-only:reviewer:docs/workflow/development-workflow.md']
+ownership fixture stale-ownership: ['write-ownership:stale:task-a']
+PASS write ownership fixtures: 5 cases cover disjoint, overlapping, handover, stale and read-only ownership, and 15 in-memory mutations each fail their case with the named blocker; write obedience and filesystem isolation remain instruction-only
+PASS ci workflow contract: the workflow-validator job checks out the exact pull-request head, enforces the recorded explicit base and runs the trusted commands, and 31 mutations each fail their named case; the static contract proves the YAML shape only, never a passing run
+Acceptance-criteria ledger:
+Criterion  Status         Gaps                                   Delegated to
+AC-01      covered        -                                      planner
+AC-02      partial        -                                      planner
+AC-03      missing        delegated_unreported:planner           planner
+AC-04      covered        -                                      implementer
+AC-05      unverified     delegated_unreported:tester            tester
+AC-06      missing        delegated_unreported:orchestrator      orchestrator
+AC-07      missing        not_delegated                          -
+Gaps:
+  - follow_up:AC-02
+  - AC-03:delegated_unreported:planner
+  - follow_up:AC-03
+  - AC-05:delegated_unreported:tester
+  - follow_up:AC-05
+  - AC-06:delegated_unreported:orchestrator
+  - follow_up:AC-06
+  - AC-07:not_delegated
+  - follow_up:AC-07
+Escalations:
+  - adr:ADR-0002:conflicts:ADR-0001
+  - adr:ADR-0002:declared-accepted-in-open-pr
+  - adr:ADR-0002:pending:Proposed
+  - decision:implementer:issue-30-implementation:Approve or reject ADR-0002
+  - decision:reviewer:issue-30-plan-review:Resolve the ADR-0001 and ADR-0002 conflict
+  - report:reviewer:Needs Decision
+PASS reports: synthetic reports reconcile with the exact expected gaps and escalations
+invalid report fixture blank-model-provenance: rejected as expected: model must be a non-empty string
+invalid report fixture blocked-evidence: reconciled with the stated gaps
+invalid report fixture conflicting-reports: reconciled with the stated gaps
+invalid report fixture covered-with-sentinel-evidence: rejected as expected: is marked covered without evidence
+invalid report fixture covered-without-evidence: rejected as expected: is marked covered without evidence
+invalid report fixture evidence-without-artifact: rejected as expected: must name a non-empty 'artifact'
+invalid report fixture explicit-missing: reconciled with the stated gaps
+invalid report fixture missing-check-state: reconciled with the stated gaps
+invalid report fixture missing-model-provenance: rejected as expected: misses fields: ['model', 'provider']
+invalid report fixture not-applicable-without-note: rejected as expected: without a note explaining why
+invalid report fixture stale-verification: reconciled with the stated gaps
+invalid report fixture supersedes-cross-agent: rejected as expected: supersedes a task declared for another agent
+invalid report fixture supersedes-drops-report: reconciled with the stated gaps
+invalid report fixture supersedes-unknown-task: rejected as expected: supersedes an unknown task
+invalid report fixture wrong-criterion-assignment: reconciled with the stated gaps
+invalid report fixture wrong-issue: rejected as expected: does not match scenario issue
+invalid report fixture wrong-task: rejected as expected: does not match the scenario task
+PASS reports negative fixtures: 17 invalid report cases fail or reconcile exactly as stated
+PASS plan identity: reviewed section of docs/workflow/ledgers/issue-30.md at e881bb1 matches sha256 474f2c07a443ea74bf3fb144db52f2a0b67af466c401f9f28e3526163e4f2ce1 (23784 bytes)
+PASS ledger structure: 8 sections in order; 3 required tables (6/5/4 columns) with 246 data rows; 17 table blocks self-consistent; 4 forbidden payload shapes absent
+WARN adr: local main 73dbbec differs from origin/main 17cf55a; using origin/main
+SKIP adr (live tree): the resolved baseline ref 'origin/main' contains no ADR-*.md record under docs/adr; merged-baseline handling is asserted only by the fixtures
+All workflow checks passed.

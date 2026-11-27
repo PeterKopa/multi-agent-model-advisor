@@ -1,0 +1,13 @@
+{
+  "description": "Invalid report fixture: a task_id that does not match the task declared for the agent in the scenario must be rejected.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "planner": "issue-30-planning"
+  },
+  "reports": ["reports/planner.json"],
+  "invalid": {
+    "error": "does not match the scenario task"
+  }
+}

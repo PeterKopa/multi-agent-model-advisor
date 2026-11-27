@@ -1,0 +1,12 @@
+{
+  "description": "The named-human code review slot is absent, so the human-review gate is open.",
+  "release_remove": [
+    "human_review"
+  ],
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "human_review:missing"
+    ]
+  }
+}
