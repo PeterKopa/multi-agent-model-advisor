@@ -45,12 +45,16 @@ permissions:
   - action: shell
     resource: "git pull*"
     effect: allow
-  # The single push allow: only "git push origin ?*" — the "?" matches exactly
-  # one character, so the refspec after origin must be non-empty; a
-  # whitespace-only tail ("git push origin ", trailing space, no refspec) does
-  # not complete the match. Any push that does not name origin with a refspec
-  # (another remote name, a bare push, a remote-only "git push origin") matches
-  # no allow rule here and falls back to the project-level "git *" deny.
+  # The single push allow: only "git push origin <refspec>" — the pattern
+  # separates remote and refspec with exactly one space and demands at least
+  # one further character after it, so a whitespace-only single-space tail
+  # ("git push origin ", trailing space, no refspec) does not complete the
+  # match; a second space would complete it and is re-denied by the required
+  # rules below. Any push that does not name origin with a refspec (another
+  # remote name, a remote-only "git push origin") matches no allow rule here
+  # and falls back to the project-level "git *" deny; the bare push falls
+  # through the same way and is additionally re-denied by the required rules
+  # below as the last match.
   - action: shell
     resource: "git push origin ?*"
     effect: allow
@@ -102,8 +106,10 @@ permissions:
   - action: shell
     resource: "rtk git commit*"
     effect: allow
-  # RTK mirror of the single push allow: "rtk git push origin ?*" — the "?"
-  # demands a non-empty refspec, so "rtk git push origin " does not match.
+  # RTK mirror of the single push allow: "rtk git push origin ?*" — remote
+  # and refspec separated by exactly one space, at least one further
+  # character required, so "rtk git push origin " (single trailing space)
+  # does not match.
   - action: shell
     resource: "rtk git push origin ?*"
     effect: allow
@@ -196,14 +202,27 @@ permissions:
     resource: "rtk git push *heads/main*"
     effect: deny
   # Push model, in plain and RTK form. The base layer is the narrow allow
-  # above: only "git push origin ?*" (and "rtk git push origin ?*") passes
-  # for this agent, and the "?" demands a non-empty refspec, so even a
-  # whitespace-only tail after "origin" does not pass. Every other push shape
-  # is handled in one of two ways:
-  # 1. Fall-through to the project deny. Pushes that do not name origin with
-  #    a refspec — another remote name ("git push upstream", "git push
-  #    github") and the remote-only "git push origin" (with or without a
-  #    trailing space, whose implicit refspec can resolve to a configured
+  # above: only "git push origin <refspec>" (and "rtk git push origin
+  # <refspec>") passes for this agent — remote and refspec separated by a
+  # single space, refspec non-empty. The double-space denies below close the
+  # space-shaped gap this pattern language can express: any second space
+  # after "origin" — a whitespace-only tail with a two-space prefix (two
+  # spaces, three or more spaces) or a two-space refspec spelling such as
+  # "git push origin  HEAD" — still completes the allow and is re-denied by
+  # "git push origin  *" / "rtk git push origin  *" as the last match; every
+  # tail with two or more spaces after "origin" shares that prefix. One
+  # shape stays open and is accepted as a limit: a single space followed by
+  # a tab still satisfies the "?" and no deny rule matches it, so the allow
+  # decides for this agent. It is not closed with a tab-literal rule because
+  # such a rule's only matching input is invisible in review, and it would
+  # also deny a legitimate "git push origin <refspec>" if the runtime
+  # normalises that whitespace — which cannot be observed offline. Recorded
+  # as a limit, not granted as a permission. Every
+  # other push shape is handled in one of two ways:
+  # 1. Fall-through to the project deny. Pushes that do not reach the allow —
+  #    another remote name ("git push upstream", "git push github") and the
+  #    remote-only "git push origin" (a single trailing space does not
+  #    complete the allow; its implicit refspec can resolve to a configured
   #    upstream, which can be main) — match no allow rule in this file, so
   #    the project-level "git *" and "*git push *" deny rules decide them;
   #    no deny rule below repeats those shapes, because under the narrow
@@ -219,15 +238,17 @@ permissions:
   #    subsuming --force, --force-with-lease, --mirror, --all, --delete,
   #    --follow-tags, --dry-run, --quiet and every short spelling or cluster
   #    (-f, -d, -uf, -vf, -qf, -ud, -vd, -uvqf and future spellings); the
+  #    double-space rules deny any second space after "origin"; the
   #    " main", ":main" and "heads/main" rules above deny pushes to main; and
   #    the blanket rules deny a "+" anywhere in the arguments and a ":" refspec
   #    with or without a remote, so a legal refname holding a plus sign is
   #    denied as a side effect — fail-closed for this agent, not left
   #    uncovered.
   # Consequence: this agent pushes "git push origin <branch>" or
-  # "git push origin HEAD" — an explicit origin refspec every time, never
-  # with a "-u" upstream option, never option-bearing, never to another
-  # remote, never remote-only.
+  # "git push origin HEAD" — an explicit origin refspec every time, remote
+  # and refspec separated by a single space, never with a "-u" upstream
+  # option, never option-bearing, never with a second space after the
+  # remote, never to another remote, never remote-only.
   # No rule below uses "?", so no flag-cluster pattern can misfire on branch
   # or refspec names.
   - action: shell
@@ -263,6 +284,15 @@ permissions:
   - action: shell
     resource: "git push"
     effect: deny
+  # The double-space deny: the allow separates remote and refspec with
+  # exactly one space and demands at least one further character, so a
+  # second space after "origin" completes the allow and must be re-denied
+  # here — a whitespace-only tail with a two-space prefix (two spaces, three
+  # or more spaces) and a two-space refspec spelling such as
+  # "git push origin  HEAD" are never part of a legitimate handover command.
+  - action: shell
+    resource: "git push origin  *"
+    effect: deny
   - action: shell
     resource: "rtk git push -*"
     effect: deny
@@ -295,6 +325,10 @@ permissions:
     effect: deny
   - action: shell
     resource: "rtk git push"
+    effect: deny
+  # RTK mirror of the double-space deny above.
+  - action: shell
+    resource: "rtk git push origin  *"
     effect: deny
 
   - action: shell
@@ -370,13 +404,12 @@ human user.
 4. Verify the change once more with the recorded validation commands before
    pushing.
 5. Push the branch and open a pull request. Push with an explicit remote and
-   refspec every time; the permission allowlist admits only
-   `git push origin <refspec>` (or `git push origin HEAD`) — there is no push
-   to another remote name, and any push without an explicit refspec does not
-   match the allow and falls back to the project-level Git deny. The
-   policy additionally re-denies option-bearing pushes (any argument starting
-   with `-`, so no `-u` upstream option) and pushes to `main`.
-   Describe the issue, the acceptance
+   refspec every time: only `git push origin <refspec>` is allowed (or
+   `git push origin HEAD`), remote and refspec separated by a single space,
+   refspec non-empty; any second space, any option-bearing form, any other
+   remote and any push to `main` are denied — a remote-only push falls back
+   to the project-level Git deny, a second space is re-denied by the agent
+   rules. Describe the issue, the acceptance
    criteria covered, ADR status (accepted baseline and any proposal in this
    pull request), validation evidence, review status, unresolved items and the
    human approval step.

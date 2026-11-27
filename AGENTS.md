@@ -94,9 +94,16 @@ loaded into every agent through `opencode.jsonc`.
   `main` are denied even for the Git Manager. Pushes are controlled by an
   allowlist, not a deny category: the Git Manager may push only
   `git push origin <refspec>` (or `git push origin HEAD`), in plain and RTK
-  form — there is no push to another remote name, and any push without an
-  explicit refspec does not match the allow and falls back to the project-level
-  `git *` deny instead of a bare or remote-only allow. Because the Git
+  form — remote and refspec separated by a single space, refspec non-empty;
+  any second space, any option-bearing form, any other remote and any push to
+  `main` are denied. A push without an explicit refspec (a bare `git push` or
+  a remote-only `git push origin`, with or without a single trailing space)
+  does not match the allow and falls back to the project-level
+  `git *` deny instead of a bare or remote-only allow (for the Git Manager
+  the bare form is additionally re-denied by its own trailing rule as the
+  last match); a second space after
+  `origin` completes the allow and is re-denied by the Git Manager's own
+  trailing `git push origin  *` rules. Because the Git
   Manager's own allows can override every project deny, its rules re-create
   the second deny layer: every option-bearing push — any argument starting
   with `-`, so no force spelling, `--mirror`, `--all`, `--delete`, `-u`,

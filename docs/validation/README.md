@@ -176,24 +176,32 @@ or `Path(...).open("w")` call must fail the audit.
   `rtk gh pr create` — and the other agents do not. `gh pr merge` and `gh api`
   are denied for every agent, including the Git Manager. The Git Manager's
   push allow is the single allowlist shape `git push origin ?*` (plus its RTK
-  mirror `rtk git push origin ?*`); the `?` matches exactly one character, so
-  the allow requires a non-empty refspec after the remote, and a push that
-  does not name `origin` with a non-empty refspec — another remote name, a
+  mirror `rtk git push origin ?*`); the `?` makes remote and refspec separate
+  by exactly one space and demands at least one further character, so only a
+  push naming `origin` with a single-space-separated, non-empty refspec
+  passes the allow, while another remote name, a
   bare `git push`, or a remote-only `git push origin` (with or without a
-  trailing space) whose implicit refspec can be `main` —
+  single trailing space) whose implicit refspec can be `main` —
   matches no Git Manager allow and falls back to the project-level `git *`
-  deny. The Git Manager frontmatter must repeat every other protected denial
-  (gh api, pull-request merges, pushes to `main`, option-bearing and
+  deny (for the Git Manager the bare form is additionally re-denied by its
+  own trailing rule as the last match). A second space after `origin` still
+  completes the allow, so the Git
+  Manager frontmatter must repeat every other protected denial
+  (gh api, pull-request merges, pushes to `main`, the double-space rules
+  `git push origin  *` and `rtk git push origin  *`, option-bearing and
   `+`/` :`-refspec pushes, and the sensitive-path shell block) after its
   allow rules, and no write allow may follow those denials. Consequently the
   Git Manager pushes `git push origin <branch>` or `git push origin HEAD` —
-  never with a `-u` upstream option, never option-bearing, never to another
+  remote and refspec separated by a single space, refspec non-empty, never
+  with a `-u` upstream option, never option-bearing, never with a second
+  space after the remote, never to another
   remote, never remote-only.
 - Permission rules are resolved with last-match-wins semantics. The check
   computes the combined rule set for every agent over a sample table that
   covers the read-only commands and their RTK mirrors, the Go quality tools and
   their filtered runs, the ask rules, the credential-path denials in file and
-  shell form, the compound/hidden-write denials, the push-to-main denials and
+  shell form, the compound/hidden-write denials, the push-to-main and
+  double-space-push denials and
   the Git Manager's write commands, including explicit `git push origin
   <feature-branch>` pushes without any option.
   Compound samples are split on the top-level separators `&&`, `||`, `;`, `|`

@@ -73,18 +73,29 @@ each subcommand; separators inside quoted wrapper arguments do not split.
   `git push <remote> HEAD:refs/heads/main`, plus their RTK forms — are denied
   for every agent. Pushes are controlled by an allowlist instead of a deny
   category: the Git Manager's single push allow is `git push origin ?*`
-  (with the RTK mirror `rtk git push origin ?*`), where the `?` matches
-  exactly one character, so the allow requires a non-empty refspec after the
-  remote and the handover shape —
+  (with the RTK mirror `rtk git push origin ?*`), where the `?` makes remote
+  and refspec separate by exactly one space and demands at least one further
+  character, so the handover shape —
   `git push origin <branch>` or `git push origin HEAD`, an explicit origin
-  refspec every time — is the only push that passes for that agent. Any push
-  that does not name `origin` with a non-empty refspec — another remote name
-  (`git push upstream`, `git push github`), a bare `git push`, or a
-  remote-only `git push origin` (with or without a trailing space) whose
-  implicit refspec can resolve to a
+  refspec every time, refspec non-empty — is the only push shape the allow
+  grants; anything else either matches no allow, is re-denied below, or is
+  recorded as a limit. Any second space after `origin` still completes the
+  allow, so the Git Manager's final rules re-deny it in plain and RTK form
+  (`git push origin  *` and `rtk git push origin  *`): every whitespace-only
+  tail with a two-space prefix (two spaces, three or more spaces) and every
+  two-space refspec spelling (`git push origin  HEAD`) is denied as the last
+  match. A tab in place of the second space is the one shape this pattern
+  language cannot express; it resolves to allow in the offline model and is
+  recorded as a limit in the Git Manager's rules, not closed with a
+  tab-literal rule. Any push that does not reach the allow — another remote
+  name (`git push upstream`, `git push github`), a bare `git push`, or a
+  remote-only `git push origin` (with or without a single trailing space)
+  whose implicit refspec can resolve to a
   configured upstream (which can be `main`) — matches no Git Manager allow
-  and falls back to the project-level `git *` deny. Because the Git Manager's
-  own allows can override every project deny, its final rules re-create the
+  and falls back to the project-level `git *` deny (for the Git Manager the
+  bare form is additionally re-denied by its own trailing rule as the last
+  match). Because the Git Manager's own allows can override every project
+  deny, its final rules re-create the
   second deny layer: every option-bearing push (`git push -*` and
   `git push * -*`, plain and RTK — any argument that starts with `-`,
   wherever it sits after the verb) is denied, which subsumes all force

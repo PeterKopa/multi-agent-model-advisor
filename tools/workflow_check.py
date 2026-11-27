@@ -282,8 +282,9 @@ PUSH_TO_MAIN_DENY_SAMPLES = [
 
 # Unsafe push forms stay denied even for the Git Manager, in plain and RTK
 # form. The base layer is the Git Manager's narrow allow ("git push origin ?*"
-# only): the "?" matches exactly one character, so pushes that do not name
-# origin with a non-empty refspec cannot match it. For
+# only): remote and refspec separated by exactly one space, at least one
+# further character required, so pushes that do not name "origin" with a
+# single-space-separated refspec cannot match it. For
 # option-bearing pushes the deny model is one shape: every option-bearing push
 # (an argument starting with "-", wherever it sits after the verb, which
 # subsumes all force spellings, mirror, --all, --delete and the quiet/dry-run
@@ -291,7 +292,10 @@ PUSH_TO_MAIN_DENY_SAMPLES = [
 # spellings and the measured bypass spellings (-ud, -vd, -uvqf, -q, --quiet,
 # --dry-run) pin the regression that motivated the model. The remote-only and
 # other-remote shapes are proven below as fall-through cases: they match no
-# Git Manager allow, so the project-level "git *" deny decides them.
+# Git Manager allow, so the project-level "git *" deny decides them. The
+# double-space refspec spellings are the measured exception: they match the
+# allow (the "?" absorbs the second space) and are re-denied by the agent's
+# double-space deny rules as the last match.
 UNSAFE_PUSH_DENY_SAMPLES = [
     "git push",
     "git push origin",
@@ -324,6 +328,11 @@ UNSAFE_PUSH_DENY_SAMPLES = [
     # deny shapes must still win with allow-then-deny ordering.
     "git push origin --force feature",
     "git push origin feature+1",
+    # Double-space refspec spelling: the narrow allow matches it — the "?"
+    # absorbs the second space — so the agent's double-space deny rule
+    # re-denies it as the last match; a second space is never part of a
+    # legitimate "git push origin <refspec>" handover command.
+    "git push origin  HEAD",
     "rtk git push",
     "rtk git push origin",
     "rtk git push --force origin main",
@@ -350,24 +359,38 @@ UNSAFE_PUSH_DENY_SAMPLES = [
     "rtk git push origin :feature",
     "rtk git push origin +main",
     "rtk git push origin +HEAD",
+    # RTK mirror of the double-space refspec spelling above.
+    "rtk git push origin  HEAD",
 ]
 
-# Non-origin remotes and the remote-only shape. Under the narrow
-# "git push origin ?*" allow these match no Git Manager allow rule at all, so
-# the project-level "git *" deny decides them; the samples pin that
-# fall-through instead of an agent deny rule, which the narrow allow makes
-# unreachable as a deciding rule for these shapes. The trailing-space
-# spellings pin the whitespace edge: fnmatch's "?" needs one character after
-# "origin", so a command that ends directly after the remote (even with a
-# trailing space left by an upstream scanner) does not complete the allow.
+# Non-origin remotes and the whitespace-tail shapes. Under the narrow
+# "git push origin ?*" allow the other-remote shapes match no Git Manager
+# allow rule at all, so the project-level "git *" deny decides them; those
+# samples pin the fall-through instead of an agent deny rule, which the
+# narrow allow makes unreachable as a deciding rule for these shapes. The
+# whitespace-tail spellings pin the edge of the allow:
+# - "git push origin " ends remote-only: the allow separates remote and
+#   refspec with exactly one space and demands one further character, so a
+#   single trailing space does not complete the match and the project deny
+#   decides;
+# - "git push origin  " (two trailing spaces) completes the match — the "?"
+#   absorbs the second space — so the agent's double-space deny rules
+#   "git push origin  *" and its RTK mirror decide them as the last match;
+#   three or more spaces share the two-space prefix and fall under the same
+#   rules.
 NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES = [
     "git push upstream",
     "git push github",
     "git push upstream main",
     "git push origin ",
+    # Two-space whitespace-only tail: completes the narrow allow, re-denied
+    # by the agent's double-space deny rule.
+    "git push origin  ",
     "rtk git push upstream",
     "rtk git push github",
     "rtk git push origin ",
+    # RTK mirror of the two-space whitespace-only tail above.
+    "rtk git push origin  ",
 ]
 
 # Read-only commit enumeration stays available for every agent in both forms.
@@ -378,14 +401,13 @@ REV_LIST_ALLOW_SAMPLES = ["git rev-list HEAD", "rtk git rev-list HEAD"]
 # therefore excluded here, and push shapes outside the allowlist are handled by
 # UNSAFE_PUSH_DENY_SAMPLES and NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES. Every push
 # in this list names origin with an explicit, non-empty refspec — the single
-# shape the narrow "git push origin ?*" allow admits (the "?" matches exactly
-# one character, so a whitespace-only tail cannot match) — without any option
-# (the model denies option-bearing pushes). The samples include the
-# preserved-allow cases from the model change: a refspec with a
-# leading-dash-free branch name, a colon refspec to a feature branch, a branch
-# name containing an internal dash and the letter f, and the double-space
-# spelling "git push origin  HEAD", where the extra space is the one character
-# the "?" matches and the refspec itself is non-empty.
+# shape the narrow "git push origin ?*" allow admits: remote and refspec
+# separated by exactly one space, at least one further character required —
+# without any option (the model denies option-bearing pushes, and the
+# double-space spellings are pinned as denies elsewhere). The samples include
+# the preserved-allow cases from the model change: a refspec with a
+# leading-dash-free branch name, a colon refspec to a feature branch, and a
+# branch name containing an internal dash and the letter f.
 GIT_MANAGER_WRITE_COMMANDS = [
     "git add .",
     "git commit -m test",
@@ -393,7 +415,6 @@ GIT_MANAGER_WRITE_COMMANDS = [
     "git push origin issue-30-multi-agent-development-workflow",
     "git push origin feature-f",
     "git push origin HEAD:refs/heads/feature",
-    "git push origin  HEAD",
     "git merge main",
     "git rebase main",
     "git checkout -b feature",
@@ -409,7 +430,6 @@ GIT_MANAGER_WRITE_COMMANDS = [
     "rtk git push origin issue-30-multi-agent-development-workflow",
     "rtk git push origin feature-f",
     "rtk git push origin HEAD:refs/heads/feature",
-    "rtk git push origin  HEAD",
     "rtk git switch -c feature",
     "rtk gh pr create --title test",
 ]
@@ -419,15 +439,22 @@ GIT_MANAGER_WRITE_COMMANDS = [
 # the narrow-allow model: option-bearing pushes ("git push -*" and
 # "git push * -*" catch any argument starting with "-", plain and RTK) are the
 # agent-level second layer; the main/heads-main rules and the blanket
-# "+"/":" rules deny force and delete refspecs and pushes to main. No rule in
+# "+"/":" rules deny force and delete refspecs and pushes to main; the
+# double-space rules ("git push origin  *" and the RTK mirror) deny any
+# second space after "origin" — the narrow allow still completes the match
+# with the "?" absorbing one character, and the required handover form
+# separates remote and refspec with exactly one space. No rule in
 # this list matches on "?", so no flag-cluster pattern can misfire on branch
-# names; the only "?" sits in the allow, where it demands a non-empty
-# refspec. The remote-only and other-remote push shapes carry no
+# names; the only "?" sits in the allow, and the double-space rules close the
+# two-or-more-space family the "?" cannot exclude on its own — the one shape
+# no rule here can express is the tab after the space, recorded as a limit in
+# the Git Manager's model comment. The remote-only and other-remote
+# push shapes carry no
 # deny rule of their own — under the narrow "git push origin ?*" allow they
 # match no allow rule and the project-level "git *" deny decides them, so an
 # agent-level rule would be unreachable as a deciding rule;
 # NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES pins those resolutions behaviourally,
-# including the trailing-space spellings.
+# including the whitespace-tail spellings.
 GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "gh api*",
     "gh pr merge*",
@@ -450,6 +477,7 @@ GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "git push * :*",
     "git push :*",
     "git push",
+    "git push origin  *",
     "rtk git push -*",
     "rtk git push * -*",
     "rtk git push *--force*",
@@ -461,6 +489,7 @@ GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "rtk git push * :*",
     "rtk git push :*",
     "rtk git push",
+    "rtk git push origin  *",
     "*/.ssh*",
     "*/.aws*",
     "*/.gnupg*",
