@@ -1,0 +1,47 @@
+{
+  "description": "Positive control for the canonical delegation packet. Every required field is present, the target is the Implementer and the write ownership names the same task, agent and scope. The fixture proves field presence only; concision and context sufficiency remain human judgement.",
+  "packet": {
+    "packet_version": 1,
+    "task_id": "issue-30-wi-co-implementation",
+    "issue": 30,
+    "agent": "implementer",
+    "criteria": [
+      {"id": "AC-PL1", "title": "Right-Sized Work Items", "coverage_target": "covered"},
+      {"id": "AC-CX1", "title": "Context Isolation and Context Efficiency", "coverage_target": "covered"},
+      {"id": "AC-WO1", "title": "Single Writer and explicit write ownership", "coverage_target": "covered"}
+    ],
+    "adr_baseline": {
+      "accepted": ["ADR-0001", "ADR-0003"],
+      "proposals": ["ADR-0002"]
+    },
+    "repository_context": [
+      "tools/workflow_check.py",
+      "docs/workflow/development-workflow.md",
+      "docs/validation/fixtures/workflow/planning/right-sized.json"
+    ],
+    "dependencies": [
+      "frozen plan (e881bb1, section 474f2c07)",
+      "WI-EV validator and fixtures"
+    ],
+    "constraints": [
+      "offline only; no network access and no credentials",
+      "no ledger, ADR, CI workflow, Go or opencode.jsonc edit"
+    ],
+    "expected_evidence": [
+      "python3 tools/audit_validator.py exit 0",
+      "python3 tools/workflow_check.py ci twice, byte-identical"
+    ],
+    "reviewed_artifact": "e881bb1",
+    "write_ownership": {
+      "task_id": "issue-30-wi-co-implementation",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": [
+        "tools/workflow_check.py",
+        "docs/workflow/delegation-packet.md"
+      ],
+      "scratch": ".tmp/issue-30-wi-co-implementation/",
+      "dependencies": ["frozen plan (e881bb1, section 474f2c07)"]
+    }
+  }
+}

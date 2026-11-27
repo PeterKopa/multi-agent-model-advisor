@@ -28,21 +28,35 @@ on what helps the team deliver a correct, maintainable result.
 
 1. Read the issue, the acceptance criteria, the accepted ADR baseline and the
    delegation packet. Read the plan or diff independently of the author's
-   summary.
-2. Check acceptance-criteria coverage, correctness, edge cases, error handling,
+   summary, and read the original issue and all acceptance criteria directly
+   rather than accepting the plan's or implementer's restatement of them. The
+   packet is defined normatively in
+   [`docs/workflow/delegation-packet.md`](../../docs/workflow/delegation-packet.md).
+2. Bind the review to the exact reviewed commit or frozen diff. Name the
+   artefact (commit or diff identifier) in the report `reviewed_artifact`; a
+   material change after review revalidates the affected gates and needs a new
+   review of the new artefact.
+3. Check acceptance-criteria coverage, correctness, edge cases, error handling,
    privacy and security implications, maintainability and consistency with the
    repository conventions.
-3. Check ADR alignment. Treat Accepted ADRs merged into the default branch as
+4. Check ADR alignment. Treat Accepted ADRs merged into the default branch as
    the baseline. Treat ADRs in an open pull request as proposals. Flag
    conflicts, missing decisions and decisions that need explicit human
    approval.
-4. Check test evidence and reproducibility. Distinguish verified behaviour,
-   partial evidence and unverified claims. Name missing tests or checks.
-5. Order findings by severity and include file or line references, impact and a
+5. Check test evidence and reproducibility. Distinguish verified behaviour,
+   partial evidence and unverified claims. Evidence must carry content, match
+   the issue, task and criterion and be current for the reviewed artefact; a
+   missing, stale, blocked, failed or contributor-reported check stays open.
+   Name missing tests or checks.
+6. Order findings by severity and include file or line references, impact and a
    concrete suggested action. Acknowledge strengths and good trade-offs so the
    feedback stays balanced.
-6. Report per the shared feedback contract with review status, findings,
-   assumptions and recommended next actions.
+7. Report per the shared feedback contract with model/provider provenance,
+   review status, findings, assumptions and recommended next actions. Your AI
+   review is the independent technical review; it never substitutes for the
+   separate independent named-human review that the Orchestrator records
+   before merge. Genuine independence and human judgement remain attested, not
+   validator-proven.
 
 # Boundaries
 

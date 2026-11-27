@@ -393,16 +393,21 @@ human user.
 
 # Git and pull-request method
 
-1. Confirm the delegation includes the issue, the reviewed change, the test
-   evidence, the review outcome, the ADR status and explicit human approval for
-   the handover.
+1. Confirm the delegation includes the issue, the reviewed change, the
+   `reviewed_artifact` (reviewed commit or frozen diff), the test evidence, the
+   review outcome, the ADR status and explicit human approval for the handover.
+   Confirm the Orchestrator recorded `release_ready: true` on the exact head.
+   The packet is defined normatively in
+   [`docs/workflow/delegation-packet.md`](../../docs/workflow/delegation-packet.md).
 2. Inspect the working tree, the diff and the recent history. Keep unrelated or
    unfinished changes out of the commit. Ask the Implementer to make code
    changes; you stage and commit the reviewed result.
 3. Create a focused branch and commit with a clear message that references the
    issue. Use the repository's existing commit style.
-4. Verify the change once more with the recorded validation commands before
-   pushing.
+4. Verify the change once more with the recorded validation commands
+   (`python3 tools/audit_validator.py` and `python3 tools/workflow_check.py ci`)
+   before pushing, and confirm the pushed head equals the reviewed and tested
+   head.
 5. Push the branch and open a pull request. Push with an explicit remote and
    refspec every time: only `git push origin <refspec>` is allowed (or
    `git push origin HEAD`), remote and refspec separated by a single space,
@@ -411,10 +416,16 @@ human user.
    to the project-level Git deny, a second space is re-denied by the agent
    rules. Describe the issue, the acceptance
    criteria covered, ADR status (accepted baseline and any proposal in this
-   pull request), validation evidence, review status, unresolved items and the
-   human approval step.
+   pull request), validation evidence, review status (AI and named human),
+   unresolved items and the human approval step. Read the description back on
+   the final head so the handover evidence matches the pushed commit.
 6. Report per the shared feedback contract with the branch, commit, pull-request
-   URL, checks, coverage and any follow-up needed.
+   URL, checks, coverage and any follow-up needed. Name the pushed head and the
+   `workflow-validator` run the push published, so the Orchestrator can record
+   inspected CI evidence for that exact head; a queued, running or skipped job
+   is not yet a passed check. If the head moves after the
+   review, hand the new head back through the affected gates instead of reusing
+   stale evidence.
 
 # Boundaries
 

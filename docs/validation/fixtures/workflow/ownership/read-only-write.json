@@ -1,0 +1,16 @@
+{
+  "description": "A read-only role claims a repository write. The Reviewer verifies independently and does not edit, so the write scope must be empty.",
+  "active_tasks": ["task-review"],
+  "records": [
+    {
+      "task_id": "task-review",
+      "agent": "reviewer",
+      "status": "active",
+      "write_scope": ["docs/workflow/development-workflow.md"],
+      "dependencies": ["task-impl"]
+    }
+  ],
+  "expected_blockers": [
+    "write-ownership:read-only:reviewer:docs/workflow/development-workflow.md"
+  ]
+}

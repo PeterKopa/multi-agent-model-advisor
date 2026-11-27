@@ -1,0 +1,64 @@
+{
+  "description": "The implementer covered AC-04 against an older reviewed artefact. Stale evidence stays open: the claim is not counted, the row remains missing and the stale-artifact gap is recorded.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "implementer": "issue-30-implementation"
+  },
+  "reports": [
+    "reports/implementer.json"
+  ],
+  "expected": {
+    "ledger": {
+      "AC-01": "missing",
+      "AC-02": "missing",
+      "AC-03": "missing",
+      "AC-04": "missing",
+      "AC-05": "missing",
+      "AC-06": "missing",
+      "AC-07": "missing"
+    },
+    "gaps": [
+      "AC-01:delegated_unreported:planner",
+      "AC-02:delegated_unreported:planner",
+      "AC-03:delegated_unreported:planner",
+      "AC-05:delegated_unreported:tester",
+      "AC-06:delegated_unreported:orchestrator",
+      "AC-07:not_delegated",
+      "AC-04:stale_artifact:implementer",
+      "follow_up:AC-01",
+      "follow_up:AC-02",
+      "follow_up:AC-03",
+      "follow_up:AC-04",
+      "follow_up:AC-05",
+      "follow_up:AC-06",
+      "follow_up:AC-07"
+    ],
+    "escalations": [],
+    "release_ready": false,
+    "blockers": [
+      "criterion-open:AC-01:missing",
+      "criterion-open:AC-02:missing",
+      "criterion-open:AC-03:missing",
+      "criterion-open:AC-04:missing",
+      "criterion-open:AC-05:missing",
+      "criterion-open:AC-06:missing",
+      "criterion-open:AC-07:missing",
+      "gap:AC-01:delegated_unreported:planner",
+      "gap:AC-02:delegated_unreported:planner",
+      "gap:AC-03:delegated_unreported:planner",
+      "gap:AC-04:stale_artifact:implementer",
+      "gap:AC-05:delegated_unreported:tester",
+      "gap:AC-06:delegated_unreported:orchestrator",
+      "gap:AC-07:not_delegated",
+      "gap:follow_up:AC-01",
+      "gap:follow_up:AC-02",
+      "gap:follow_up:AC-03",
+      "gap:follow_up:AC-04",
+      "gap:follow_up:AC-05",
+      "gap:follow_up:AC-06",
+      "gap:follow_up:AC-07"
+    ]
+  }
+}

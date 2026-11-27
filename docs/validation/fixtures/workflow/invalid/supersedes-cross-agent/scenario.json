@@ -2,6 +2,7 @@
   "description": "Invalid report fixture: the reviewer report supersedes a task the scenario declares for the implementer. Supersession is scoped to the reporting agent's own tasks, so the cross-agent target must be rejected instead of dropping another agent's report.",
   "issue": 30,
   "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
   "tasks": {
     "implementer": "issue-30-implementation",
     "reviewer": "issue-30-plan-review"

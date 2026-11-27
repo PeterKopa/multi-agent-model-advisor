@@ -1,0 +1,14 @@
+{
+  "description": "A skipped required check is not green; only an inspected pass counts.",
+  "release_patch": {
+    "workflow_validator_ci": {
+      "state": "skipped"
+    }
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "workflow_validator_ci:skipped"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "description": "The AI code review is evidence for a different head than the PR head, so the handover evidence is not bound to the final commit.",
+  "release_patch": {
+    "ai_code_review": {
+      "head": "9999999999999999999999999999999999999999"
+    }
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "ai_code_review:head-mismatch",
+      "pr-head:mismatch"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "description": "Positive control: an implementation task, a ledger task and a read-only review task hold disjoint write scopes and distinct scratch directories. No overlap, no stale task, no role violation.",
+  "active_tasks": ["issue-30-wi-co-implementation", "issue-30-ledger", "issue-30-wi-co-review"],
+  "records": [
+    {
+      "task_id": "issue-30-wi-co-implementation",
+      "agent": "implementer",
+      "status": "active",
+      "write_scope": [
+        "tools/workflow_check.py",
+        "docs/workflow/delegation-packet.md"
+      ],
+      "scratch": ".tmp/issue-30-wi-co-implementation/",
+      "dependencies": ["issue-30-plan-freeze"]
+    },
+    {
+      "task_id": "issue-30-ledger",
+      "agent": "orchestrator",
+      "status": "active",
+      "write_scope": ["docs/workflow/ledgers/issue-30.md"],
+      "scratch": ".tmp/issue-30-ledger/",
+      "dependencies": ["issue-30-wi-co-implementation"]
+    },
+    {
+      "task_id": "issue-30-wi-co-review",
+      "agent": "reviewer",
+      "status": "active",
+      "write_scope": [],
+      "dependencies": ["issue-30-wi-co-implementation"]
+    }
+  ],
+  "expected_blockers": []
+}

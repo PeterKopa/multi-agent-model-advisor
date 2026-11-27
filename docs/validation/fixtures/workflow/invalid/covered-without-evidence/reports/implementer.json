@@ -2,6 +2,9 @@
   "agent": "implementer",
   "issue": 30,
   "task_id": "issue-30-implementation",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
   "status": "Completed",
   "completed_work": [
     "Claims the shared feedback contract work as complete without recording any evidence item."

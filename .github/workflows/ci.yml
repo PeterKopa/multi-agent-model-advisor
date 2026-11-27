@@ -237,3 +237,84 @@ jobs:
         uses: jdx/jactionlint@72c00452809bcca05b8bc12acdcf15dd7a9c1c5e # v2.6.0
         with:
           online: 'false'
+
+  # Deterministic offline validation of the development-workflow rules. This
+  # job is the CI evidence for AC-CI1: it checks out the exact pull-request
+  # head, pins the base the change was reviewed against to an explicit
+  # commit, and runs the same trusted commands a local run uses. It runs
+  # `ci` and never `all`: the live release record does not exist yet and is
+  # evaluated later, outside this job.
+  #
+  # The YAML shape is also asserted by `check_ci_workflow_contract()` in
+  # tools/workflow_check.py, and `jactionlint` checks its syntax; neither
+  # proves a passing run. The `workflow_validator_ci` slot of the release
+  # record needs inspected run/job/step/log evidence on the reviewed head.
+  #
+  # Full history is required for two reasons: the plan-identity check reads
+  # the reviewed plan section out of its commit, and the base assertion
+  # resolves the recorded base commit in this checkout.
+  workflow-validator:
+    name: Workflow validator (trusted ci)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Only a pull request carries the base the change is reviewed against; a
+    # push or a manual dispatch has no comparable base to assert. Re-running
+    # the pull-request run keeps its event, so no `workflow_dispatch` path is
+    # needed. A skipped job is never green: it does not fill the CI slot.
+    if: github.event_name == 'pull_request'
+    env:
+      # The explicit base this change was reviewed against: a commit identity,
+      # never a branch name. A stale local `main` is environment state and
+      # must not decide this check; when `main` advances, record the new base
+      # deliberately in a reviewed commit instead of relabelling a result.
+      EXPECTED_BASE_SHA: 17cf55aa0181bf16bf6b0c1c5942ce67bcc57119
+      # The exact head under review: the pull-request head commit, not the
+      # synthetic merge commit GitHub builds for the pull request.
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      # The base repository owns the base branch. Checking the head out from a
+      # fork makes `origin` the fork, so the base is fetched from here.
+      BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+    steps:
+      - name: Checkout the exact pull-request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Prints and asserts expected versus actual base and head. A mismatch
+      # fails the job; it is not relabelled, skipped or resolved with
+      # `continue-on-error`.
+      - name: Assert the recorded base and head
+        run: |
+          set -euo pipefail
+          # Resolve the base branch from the base repository, so a fork's own
+          # `main` can never satisfy the assertion below.
+          git fetch --no-tags "https://github.com/${BASE_REPOSITORY}" \
+            "+refs/heads/main:refs/remotes/origin/main"
+          actual_head="$(git rev-parse HEAD)"
+          actual_base="$(git rev-parse refs/remotes/origin/main)"
+          echo "expected head: ${EXPECTED_HEAD_SHA}"
+          echo "actual head:   ${actual_head}"
+          echo "expected base: ${EXPECTED_BASE_SHA}"
+          echo "actual base:   ${actual_base}"
+          if [ "${actual_head}" != "${EXPECTED_HEAD_SHA}" ]; then
+            echo "checked-out head is not the reviewed pull-request head" >&2
+            exit 1
+          fi
+          if [ "${actual_base}" != "${EXPECTED_BASE_SHA}" ]; then
+            echo "origin/main does not resolve to the recorded base SHA" \
+              "record the base deliberately instead of relabelling the check" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "${EXPECTED_BASE_SHA}" HEAD; then
+            echo "the recorded base is not an ancestor of the reviewed head" >&2
+            exit 1
+          fi
+
+      - name: Audit the validator
+        run: python3 tools/audit_validator.py
+
+      - name: Run the trusted offline workflow checks
+        run: python3 tools/workflow_check.py ci

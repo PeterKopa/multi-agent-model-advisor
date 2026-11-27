@@ -2,6 +2,7 @@
   "description": "Invalid report fixture: the newer implementer report supersedes the older implementer report. The superseded covered claim is dropped from reconciliation, so the criterion keeps the newer unverified status instead of the stale covered claim.",
   "issue": 30,
   "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
   "tasks": {
     "implementer": ["issue-30-implementation", "issue-30-implementation-r2"]
   },

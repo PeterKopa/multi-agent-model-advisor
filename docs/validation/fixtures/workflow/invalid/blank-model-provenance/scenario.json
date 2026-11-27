@@ -1,0 +1,13 @@
+{
+  "description": "Invalid report fixture: a report carries a blank `model` value. A whitespace-only value looks like provenance without being reproducible, so validation must reject it and require the explicit `unknown` sentinel instead.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "planner": "issue-30-planning"
+  },
+  "reports": ["reports/planner.json"],
+  "invalid": {
+    "error": "model must be a non-empty string"
+  }
+}

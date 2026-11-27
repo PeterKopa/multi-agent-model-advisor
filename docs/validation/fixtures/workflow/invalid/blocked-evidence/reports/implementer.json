@@ -1,0 +1,41 @@
+{
+  "agent": "implementer",
+  "issue": 30,
+  "task_id": "issue-30-implementation",
+  "status": "Completed",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
+  "completed_work": [
+    "Synthetic negative fixture work."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "covered",
+      "evidence": [
+        {
+          "artifact": "docs/workflow/feedback-contract.md",
+          "check_state": "blocked"
+        }
+      ]
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Synthetic negative fixture.",
+    "planning": "Synthetic negative fixture.",
+    "instructions": "Synthetic negative fixture.",
+    "collaboration": "Synthetic negative fixture."
+  }
+}

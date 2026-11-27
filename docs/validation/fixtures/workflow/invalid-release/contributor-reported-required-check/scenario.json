@@ -1,0 +1,14 @@
+{
+  "description": "A required check reported by a contributor is contributor-reported evidence, not an inspected pass, and blocks release.",
+  "release_patch": {
+    "workflow_validator_ci": {
+      "state": "contributor-reported"
+    }
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "workflow_validator_ci:contributor-reported"
+    ]
+  }
+}

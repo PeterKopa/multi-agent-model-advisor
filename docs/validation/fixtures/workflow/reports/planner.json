@@ -2,6 +2,9 @@
   "agent": "planner",
   "issue": 30,
   "task_id": "issue-30-planning",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
   "status": "Completed",
   "completed_work": [
     "Prepared the acceptance-criteria plan and identified the agent configuration work.",

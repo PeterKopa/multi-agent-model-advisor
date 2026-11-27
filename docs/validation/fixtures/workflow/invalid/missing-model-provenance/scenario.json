@@ -1,0 +1,13 @@
+{
+  "description": "Invalid report fixture: a report omits the required `model` and `provider` provenance fields. A report without provenance cannot be verified, so validation must reject it instead of treating the absence as neutral.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "artifact": "1111111111111111111111111111111111111111",
+  "tasks": {
+    "planner": "issue-30-planning"
+  },
+  "reports": ["reports/planner.json"],
+  "invalid": {
+    "error": "misses fields: ['model', 'provider']"
+  }
+}

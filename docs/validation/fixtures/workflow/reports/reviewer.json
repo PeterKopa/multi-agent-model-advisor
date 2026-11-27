@@ -2,6 +2,9 @@
   "agent": "reviewer",
   "issue": 30,
   "task_id": "issue-30-plan-review",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
   "status": "Needs Decision",
   "completed_work": [
     "Reviewed the plan against the acceptance criteria and the ADR baseline."

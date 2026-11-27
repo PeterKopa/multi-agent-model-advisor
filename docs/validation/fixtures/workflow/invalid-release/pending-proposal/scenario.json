@@ -1,0 +1,18 @@
+{
+  "description": "An effective non-accepted ADR proposal in the release record remains pending and blocks release.",
+  "release_patch": {
+    "proposals": [
+      {
+        "id": "ADR-0002",
+        "declared_status": "Accepted",
+        "effective_status": "Proposed"
+      }
+    ]
+  },
+  "expected": {
+    "release_ready": false,
+    "blockers": [
+      "proposal-pending:ADR-0002:Proposed"
+    ]
+  }
+}

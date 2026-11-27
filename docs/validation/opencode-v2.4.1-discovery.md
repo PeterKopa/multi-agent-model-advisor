@@ -151,17 +151,34 @@ exotic constructs rely on the scanner's fail-closed behaviour.
 
 ## Offline validation
 
-The output below is abridged. The full run, including the fixture ledger, the
-permissions fixtures and the actual-repository ADR section, is committed in
-[`workflow-check-output.txt`](workflow-check-output.txt).
+The output below is abridged. The committed capture in
+[`workflow-check-output.txt`](workflow-check-output.txt) is the exact stdout of
+`python3 tools/workflow_check.py ci`, including the release fixtures, the
+fixture ledger and the negative fixture cases; the validation README records
+its line count and byte size. `ci` runs without network access or credentials.
+The final `all` mode adds the live release record and exits non-zero while that
+record is missing or incomplete.
 
 ```console
-$ python3 tools/workflow_check.py all
+$ python3 tools/workflow_check.py ci
+PASS audit: workflow_check.py passed 6 static properties ...
 PASS config: six agents, resolved permission boundaries, shared instructions, Git ownership and human-only merge are consistent
 PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+PASS adr in-memory fixtures: body-signature stability, unknown references, identifier collisions, non-accepted conflicts and open pull-request status mapping are enforced
 PASS permissions fixtures: over-broad allow rules are rejected and compliant agent rules pass
+PASS ledger structure in-memory fixtures: the well-formed control passes, a five-cell row names its line and both counts, the recorded edit payloads, the tool-call tail and the literal \n| escape fail, and missing, duplicated and out-of-order sections are rejected
+PASS reports in-memory fixtures: empty and sentinel-evidence covered claims stay unsupported, structured evidence identity is enforced, contradictory coverage values demote to unverified, unknown provenance is accepted while blank provenance is rejected, and self-, cross-agent, unknown and cyclic supersession is rejected
+PASS release gate in-memory fixtures: the synthetic all-green control evaluates true and 52 mutations each force false with their named blocker; this proves the evaluator only, never real release readiness
+PASS release negative fixtures: 12 expected-false release cases assert the exact blockers inside the fixture harness
+PASS right-sized work item fixture: nine factors, an independently verifiable outcome and named-human approval for material scope changes are required; 20 mutations each fail their case and no rigid size threshold is encoded
+PASS delegation packet fixture: the canonical document carries every required field, the workflow and AGENTS.md link to it, and 23 mutations each fail their case; concision and context sufficiency remain human judgement
+PASS write ownership fixtures: 5 cases cover disjoint, overlapping, handover, stale and read-only ownership, and 15 in-memory mutations each fail their case with the named blocker; write obedience and filesystem isolation remain instruction-only
+PASS ci workflow contract: the workflow-validator job checks out the exact pull-request head, enforces the recorded explicit base and runs the trusted commands, and 31 mutations each fail their named case; the static contract proves the YAML shape only, never a passing run
 PASS reports: synthetic reports reconcile with the exact expected gaps and escalations
-PASS adr: open pull-request ADRs remain proposals and do not change the baseline
+PASS reports negative fixtures: 17 invalid report cases fail or reconcile exactly as stated
+PASS plan identity: reviewed section of docs/workflow/ledgers/issue-30.md at e881bb1 matches sha256 474f2c07a443ea74bf3fb144db52f2a0b67af466c401f9f28e3526163e4f2ce1 (23784 bytes)
+PASS ledger structure: 8 sections in order; 3 required tables (6/5/4 columns) with 246 data rows; 17 table blocks self-consistent; 4 forbidden payload shapes absent
+SKIP adr (live tree): the resolved baseline ref 'origin/main' contains no ADR-*.md record under docs/adr; merged-baseline handling is asserted only by the fixtures
 All workflow checks passed.
 ```
 

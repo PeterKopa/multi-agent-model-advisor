@@ -2,6 +2,9 @@
   "agent": "implementer",
   "issue": 30,
   "task_id": "issue-30-implementation-r2",
+  "model": "synthetic-model",
+  "provider": "synthetic-provider",
+  "reviewed_artifact": "1111111111111111111111111111111111111111",
   "status": "Partial",
   "supersedes": ["issue-30-implementation"],
   "completed_work": [
