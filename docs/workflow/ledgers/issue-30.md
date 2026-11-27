@@ -22,6 +22,14 @@
 
 ## Acceptance criteria
 
+The authoritative baseline is the issue #30 body as updated on 2026-11-26: the 21
+original criteria plus nine added by the three scope comments on PR #32
+(`#issuecomment-7204153066`, `#issuecomment-7204224068`,
+`#issuecomment-7204320585`). The nine additions are recorded below with stable
+IDs. The Orchestrator's earlier intake missed those comments; the follow-up
+review on `b013f04` found the gap, and the coverage below is the reconciled
+state, not a retroactive claim that the work was complete.
+
 | ID | Criterion | Delegated to | Status | Evidence | Gaps / follow-up |
 | --- | --- | --- | --- | --- | --- |
 | AC-A1 | Define a primary Orchestrator and five subagents: Planner, Reviewer, Implementer, Tester, Git Manager | Implementer | covered | `.opencode/agents/*.md`, `docs/workflow/development-workflow.md`, `opencode debug agents` | none |
@@ -45,6 +53,212 @@
 | AC-V3 | Store agent definitions and shared instructions in the repository; keep credentials and personal provider settings in authorised locations | Implementer | covered | `.opencode/agents/`, `AGENTS.md`, `docs/workflow/`, `opencode.jsonc` | Credential paths denied for read, edit, external access and shell strings; `~/.config/opencode/*` requires approval; `.env.example` stays readable |
 | AC-V4 | Preserve global OpenCode configuration and hand over reviewed pull requests for human approval | Orchestrator / Git Manager | covered | `opencode debug config` sources; global file unchanged; Git Manager handover instructions; `gh pr merge`, `gh api` and pushes to `main` denied for every agent and re-denied last in the Git Manager | Human review and merge pending |
 | AC-V5 | Keep deliverables focused on the development workflow and supporting documentation | Orchestrator | covered | Changed-file review | Application implementation remains in #27–#29 |
+| AC-AI1 | Adopt AI-first development: AI agents own planning, implementation, automated verification, independent technical review and pull-request preparation; the human defines and approves goals, significant scope and architecture decisions, independently reviews the code and retains final approval and merge authority | Implementer | partial | `AGENTS.md` and the workflow document assign the roles and keep the merge human-only | The AI-first principle and the independent human code-review step are not stated as a gate |
+| AC-PL1 | Apply Right-Sized Work Items before detailed planning, weighing cohesion, dependencies, complexity, architectural impact, side effects, testability, agent context, coordination overhead and AI/human review effort; recommend splitting only for independently verifiable outcomes; present material scope changes for approval; use no rigid size thresholds | Planner | missing | none — no occurrence of Right-Sized Work Items in the repository | Needs the pre-planning decision, the Planner and Orchestrator instructions and a fixture |
+| AC-RV1 | Require independent AI code review and independent human code review before merge; the Reviewer checks the original issue and all acceptance criteria independently of the implementation plan | Reviewer | partial | Reviewer gates cover the AI review; the handover records no independent human code review | Add the human review step and its handover state |
+| AC-VB1 | Bind plan review to a versioned plan and code review, test evidence and handover to the exact reviewed commit or an identifiable frozen diff; revalidate affected gates after material changes; reconcile the final PR head with the reviewed evidence | Orchestrator | partial | Frozen fingerprints are used in practice and recorded per round | The rule is not documented as a gate and is not validated |
+| AC-PV1 | Extend the feedback contract with actual model/provider identity and optional thinking configuration; record unknowns explicitly, preserve local privacy and keep personal provider settings in authorised locations | Implementer | missing | `docs/workflow/feedback-contract.md` has no model/provider field | Add the fields, the unknown convention and fixtures |
+| AC-CI1 | Integrate the deterministic offline workflow validator into GitHub Actions; tie final verification to the reviewed commit and inspect job, step and log evidence; distinguish passed, failed, skipped, unavailable and contributor-reported checks | Implementer | missing | `.github/workflows/ci.yml` has no validator job | The owner reconciled the earlier deferral on 2026-11-27 and approved implementing the job; implementation pending |
+| AC-CX1 | Apply Context Isolation & Context Efficiency: task-specific delegation packets with the relevant acceptance criteria, ADR baseline and proposals, necessary repository context, dependencies, constraints, expected evidence and task identity; prefer concise structured handoffs; document context assumptions and request missing context before consequential decisions | Orchestrator | missing | Delegation packets exist in practice but are not standardised or documented as a rule | Add the packet template and the rule |
+| AC-FC1 | Apply Fail-Closed Quality Gates: distinguish passed, failed, unverified and blocked; mark covered only with sufficient applicable evidence tied to the correct issue, task and reviewed artefact; keep missing, skipped, stale, contradictory or blocked evidence open; add offline negative fixtures for missing evidence, conflicting reports and stale verification | Tester | partial | Reconciliation was hardened with ten negative fixtures | Evidence is still checked only as a non-empty string, a gap does not block release, and `decision_needed` is not processed |
+| AC-WO1 | Apply Single Writer and explicit write ownership: record responsible agent, task, affected files, dependencies and write scope before mutating work; serialise overlapping writes; keep the Orchestrator as sole ledger writer, the Implementer for product code, the Planner for ADR proposals, Reviewer and Tester read-only, Git operations with the Git Manager; allow parallel read-only analysis; isolate test outputs; pause and hand over on overlap; validate with offline synthetic cases | Orchestrator | missing | Parallel agents shared `.tmp/` and one cleanup deleted another's scratch; no ownership protocol exists | Add the policy, the ownership record and the fixtures |
+
+## Implementation plan (revision 2)
+
+- Author: Planner, issue #30, task `issue-30-baseline-30-r2`, 2026-11-27; status `Completed`.
+- Review disposition: revision 1 required changes; F1-F11 are closed by the blocks indexed below.
+- Baseline: all 30 criteria, including the carry-forward re-verification below; #33/#34 remain separate.
+
+### Plan identity and freeze protocol (F1, F8)
+
+| Item | Binding rule |
+| --- | --- |
+| Extraction | In the committed UTF-8/LF ledger blob, hash from the first byte of `## Implementation plan (revision N)` up to, but excluding, the first byte of the following `## Reports reconciled`. Include every raw section byte, including internal code fences and the trailing blank line, so the section ends `\n\n`; an outer presentation fence and display line numbers are not ledger content. `section_sha256 = SHA256(extracted_bytes)`; also record the half-open byte range and length. |
+| Writers | The Orchestrator alone pastes/revises this ledger section. The Git Manager makes a plan-only commit after the approved Git handover. The Implementer, Tester and Reviewer make no ledger edits. |
+| Review and identity | The Reviewer independently reviews the extracted section **from that commit** against the original issue and all 30 criteria. Plan identity is `(reviewed_commit_sha, ledger_path, section_sha256)`; an uncommitted section or candidate hash is not plan identity. |
+| Freeze point | The freeze occurs when the Reviewer approves that committed section and names its commit and section hash. WI-EV delegation starts only after this point. Any plan-content change requires a new revision, plan-only commit and independent plan review. |
+| Later ledger commits | Every post-review ledger-only commit is a material AC-VB1 change: re-run affected reconciliation, Tester and Reviewer gates and reconcile the final PR head. A plan-section change always restarts plan review; there is no ledger exclusion or free pass. |
+
+### Right-Sized Work Items decision (AC-PL1; F3, F10)
+
+Keep the reviewed split: three sequential work items inside issue #30, not nine and no new issues.
+
+| Work item | Criteria | Independently verifiable outcome |
+| --- | --- | --- |
+| WI-EV: evidence and review gates | AC-AI1, AC-RV1, AC-VB1, AC-PV1, AC-FC1 | Provenance/artifact-bound reports, fail-closed reconciliation, trusted `ci` validation mode and the single-boolean final release gate |
+| WI-CO: coordination and ownership | AC-PL1, AC-CX1, AC-WO1 | Right-sized planning, one canonical delegation packet and deterministic ownership/handover cases |
+| WI-CI: CI evidence | AC-CI1 | An exact-head `workflow-validator` job with enforced base ref and inspected run/job/step/log evidence |
+
+| AC-PL1 factor | Decision |
+| --- | --- |
+| Cohesion | Evidence schema/reconciliation are one contract; coordination/ownership are a second; CI is an operational integration. |
+| Dependencies | WI-CO stale/conflict cases and WI-CI evidence use WI-EV's schema. At integration the dependency is bidirectional: WI-EV supplies the CI contract and release evaluator, while the later WI-CI job supplies required CI evidence to the release gate. |
+| Complexity | Keep schema and precedence together to avoid repeated fixture migrations; isolate CI's external-evidence complexity. |
+| Architectural impact | WI-EV/WI-CO amend the unmerged ADR-0002 workflow proposal; WI-CI changes the CI contract already approved by the owner on 2026-11-27. |
+| Side effects | String-only covered evidence becomes insufficient; old fingerprints/readiness claims become historical; CI and human gates can block release. |
+| Testability | WI-EV/WI-CO are deterministic offline; WI-CI additionally needs actual Actions evidence, and real human review cannot be synthesized. |
+| Agent context | Three focused packets limit context without separating tightly coupled validator changes. |
+| Coordination overhead | One serial mutation path and three review points avoid nine migrations/handovers; shared files are never concurrently edited. |
+| AI/human review effort | Each item gets focused AI review/testing, then one integrated final-head AI review and one named-human review of the complete PR. |
+
+This uses independently verifiable outcomes, not rigid counts of criteria, files or lines. The ADR-0002 amendment remains Planner-owned within WI-EV.
+
+### Sequence (unchanged order; F1, F3)
+
+1. Orchestrator writes revision 2; Git Manager makes the plan-only commit; Reviewer approves that committed section; freeze.
+2. WI-EV, then Tester verification and Reviewer code review of its frozen target.
+3. WI-CO, then Tester verification and Reviewer code review of its frozen target.
+4. WI-CI, then Tester verification, a published candidate for actual Actions evidence, and Reviewer code review. The job runs trusted `ci` mode; its result later feeds `all`.
+5. Integrated final gate: record actual CI and named-human review in the ledger release record, reconcile the actual PR base/head, refresh affected gates, then run `all`. The human alone merges after `release_ready=true`.
+
+### Criterion map (F2-F9)
+
+| Criterion | Concrete file/section changes | Verification |
+| --- | --- | --- |
+| AC-AI1 | `AGENTS.md` quality gates; `docs/workflow/development-workflow.md` goals/roles/handover; `.opencode/agents/orchestrator.md`; `docs/workflow/ledgers/README.md`; ADR-0002 decision/consequences | `validate_release_gate()` rejects AI-only evidence; documents label the principle and human authority as instruction/human-judgement rules, not offline-proven behaviour |
+| AC-PL1 | Sizing steps in the workflow and Planner/Orchestrator prompts; ledger sizing template; `docs/validation/fixtures/workflow/planning/right-sized.json`; `check_right_sized_work_item_fixture()` | Nine-factor positive control; mutations remove each factor, independent verifiability and required approval field. Actual approval/material trade-offs remain named-human evidence |
+| AC-RV1 | Reviewer/Orchestrator/Git Manager prompts; `docs/workflow/feedback-contract.md` review evidence; `AGENTS.md`; `validate_release_gate()` | Missing AI review, missing human review, AI-identity reuse, missing human provenance and head mismatch each force false; Reviewer reads the original issue/all criteria directly |
+| AC-VB1 | This committed ledger plan; `docs/workflow/ledgers/README.md`; feedback contract; workflow stages and agent prompts; `check_plan_identity()` and artifact checks | One-byte/trailing-newline, stale-artifact and final-head mutations fail; post-review ledger-only changes trigger affected revalidation |
+| AC-PV1 | Feedback contract fields `model`, `provider`, `thinking`; `docs/workflow/model-assignments.md`; `REPORT_FIELDS`/report validation; `fixtures/workflow/invalid/missing-model-provenance/` | Synthetic actual/unknown values pass; missing/blank fails. Truth/privacy of real identities and absence of reasoning traces are reviewer-inspected and labelled as such |
+| AC-CI1 | `.github/workflows/ci.yml` `workflow-validator`; `tools/workflow_check.py` trusted `ci`/`all` modes; validation/workflow/ledger docs | `check_ci_workflow_contract()` plus `jactionlint`; actual run/job/step/log inspection binds the reviewed SHA and base; no skipped required check is green |
+| AC-CX1 | **Normative:** `docs/workflow/delegation-packet.md`. `development-workflow.md ## Delegation packet` becomes only a link to it; `AGENTS.md` and agent prompts also link rather than duplicate rules | `validate_delegation_packet()` mutations omit identity/criteria/artifact/ownership. Concision, sufficient context and requesting missing context are explicitly instruction/human-judgement rules |
+| AC-FC1 | Feedback contract evidence/check states; `validate_report()`, `reconcile()`, `evaluate_release_gate()`; ledger release record; validation docs and fixtures | Exact status/gap/escalation/blocker assertions and a mutation per guard; fixture false outcomes are expected test results, while the live `all` gate fails non-zero on false |
+| AC-WO1 | `AGENTS.md`; workflow ownership section; ledger ownership/release templates; canonical packet; role prompts; `validate_write_ownership()` and ownership fixtures | Overlap/disjoint/handover/stale/read-only mutations; `.tmp/<task-id>/` paths. Actual write obedience and filesystem isolation are instruction-only limits stated in the documents |
+
+The Orchestrator owns both `docs/workflow/ledgers/issue-30.md` and the machine-readable `docs/workflow/ledgers/issue-30.release.json`. The latter carries live release evidence and decisions; synthetic fixtures never serve as that live record.
+
+### Reconciliation and the single release boolean (F2-F4, F6, F9)
+
+| Rule | Exact required behaviour and load-bearing mutation |
+| --- | --- |
+| Disagreement | In `reconcile`, any contradictory supported coverage values produce `disagreement:<values>`, demote the criterion to `unverified`, add `follow_up`, and force `release_ready=false`; `covered` never wins. `test_conflicting_reports_cannot_pass` starts from an otherwise green control: restoring covered-wins or omitting the release blocker makes the conflicting case pass and must fail the test suite. |
+| Decisions/proposals | Every non-empty `adr_alignment.decision_needed` emits `decision:<agent>:<task>:<id>` and every effective non-accepted proposal emits `adr:<id>:pending:<effective-status>`; either forces false regardless of report status. Removing either loop makes `unresolved-decision` pass and must be caught. |
+| Evidence | `covered` requires sufficient applicable structured evidence matching issue, task, delegated criterion and current artifact. Missing, stale, blocked, failed or unrelated evidence stays open. Removing identity/freshness checks is caught by wrong-task, wrong-criterion and stale-verification mutations. |
+| Required checks | `check_state` is exactly `passed`, `failed`, `skipped`, `unavailable`, `contributor-reported`; only inspected `passed` evidence is green. Skipped/unavailable/contributor-reported required checks block unless a verified explicit base SHA enables a subsequent inspected pass or a named human resolves the item under the approval rules. |
+| Human slot | `human_review` requires a distinct human-attributed name/login, `reviewer_type: human`, independent-review attestation, PR-review/owner-record provenance, timestamp and final head. AI identities, including the AI-authored owner review, are ineligible. Removing distinctness/provenance checks must fail a fixture. |
+
+`release_ready` is one boolean, not a prose verdict:
+
+```text
+release_ready = committed_plan_review_passed
+  AND ai_code_review_passed
+  AND named_human_code_review_passed
+  AND tester_verification_passed
+  AND workflow_validator_ci_passed
+  AND all_required_criteria_covered_with_current_evidence
+  AND no_gaps
+  AND no_disagreements
+  AND no_decision_needed
+  AND no_pending_effective_proposals
+  AND no_open_required_decisions
+  AND pr_head_matches_all_evidence
+```
+
+The complete required-item set is therefore: committed plan review; independent AI code review against the original issue/all criteria; independent named-human code review; Tester verification; passing workflow-validator CI; current applicable evidence for every required criterion; no gaps or disagreements; no `decision_needed`, pending proposal or other required decision; and exact PR-head agreement across plan/code/test/CI/human/handover evidence. Ownership overlaps and stale/blocked/skipped/unavailable/contributor-only required evidence are gaps, not exceptions.
+
+Add trusted `ci` mode (audit plus offline config/ADR/report/fixture checks) and final `all` mode (`ci` plus the live release record). `all --release-scenario docs/workflow/ledgers/issue-30.release.json` exits non-zero whenever `release_ready=false`; missing/unusable live input is `unavailable` and false. Expected-false synthetic cases run inside the fixture harness and do not invoke the live exit path. The synthetic all-green control proves only the evaluator, never real release readiness. After the named human's independent review is recorded in both ledger views, the Orchestrator re-runs `all` against that record.
+
+This resolves the CI ordering without weakening either gate: WI-EV builds `ci` and `all`; WI-CI later runs `ci` in Actions; the inspected CI result is then a required input to `all`. The release gate depends on that later CI artifact, and the CI workflow contract depends on WI-EV's validator.
+
+### Open required decisions (F5; all force `release_ready=false` until closed)
+
+| ID | Required human resolution and closure evidence |
+| --- | --- |
+| OD-ROLE | Per-role tool/MCP lockdown: the owner chooses/approves the boundary and harmless final-head capability inspection verifies it. Shell matrices alone do not close exposed merge capabilities. |
+| OD-BRANCH | Repository-side branch protection: the owner decides/applies required human review, no force push and no direct push; the ledger names the human and settings evidence. Agents do not change settings. |
+| OD-ADR-LIVE | Live ADR baseline: the owner resolves the verified explicit base SHA/legacy mapping; the actual live check must pass, or the owner records an explicit decision under the approval rules. A fixture or SKIP cannot close it. |
+| OD-PR-INVENTORY | PR-description ADR inventory: the owner approves the correct accepted-baseline/proposal inventory; the Git Manager updates and reads back the description on the final head. |
+
+These are recorded in `decision_needed` even where implementation is outside agent scope. They cannot disappear behind deferred scope.
+
+### CI binding (F3, F6)
+
+The `workflow-validator` job must use `actions/checkout` with `fetch-depth: 0`, `persist-credentials: false`, the exact PR head SHA/repository, and an enforced `origin/main` resolved to the recorded explicit base SHA. It prints/asserts expected versus actual base/head, runs `python3 tools/audit_validator.py` then `python3 tools/workflow_check.py ci`, and has no `continue-on-error`. `check_ci_workflow_contract()` mutations remove the full-history setting, exact-head checkout, base enforcement or trusted command. `jactionlint` checks workflow syntax; only actual run/job/step/log inspection establishes `passed`.
+
+For a skipped live ADR check, a verified base SHA is an input to re-running and obtaining an inspected pass, not permission to relabel SKIP. Failed, skipped, unavailable and contributor-reported required checks remain blockers; a named human resolution records identity, rationale, reference and final head.
+
+### Fixture strategy (F2-F6, F9)
+
+| Suite | Cases and expected proof |
+| --- | --- |
+| AC-FC1 file fixtures | Migrate `conflicting-reports` to unverified/false; add `stale-verification`, `blocked-evidence`, `missing-required-gate`, `unresolved-decision`, `contributor-reported-required-check`, `wrong-criterion-assignment`, missing AI/human review and pending-proposal cases. Assert exact ledger, gaps, escalations and blockers. |
+| AC-FC1 in-memory | All-green positive control; mutations for covered-wins disagreement, each required release input, each decision/proposal loop, stale head, AI-identity reuse and every non-pass check state. Expected-false fixtures pass the harness only when false is detected. |
+| AC-WO1 | `overlapping-writes`, `disjoint-writes`, `ownership-handover`, `conflicting-evidence`, `stale-evidence`, `parallel-read-only`; mutations add shared `.tmp/`, missing handover, role violation, changed scope and separate-worktree integration without renewed gates. |
+| Regression | `python3 tools/audit_validator.py`; trusted `ci` twice with byte comparison under frozen refs; `jactionlint`; recorded output refresh. Final `all` runs separately against live release evidence and must be zero only when true. |
+
+### Documentation-versus-rules contract (F7)
+
+Every normative statement is classified here and receives the same limitation label in its normative document.
+
+| Rule | Validator assertion + load-bearing mutation, or explicit judgement-only limit |
+| --- | --- |
+| Committed plan identity/freeze | `check_plan_identity()` recomputes committed bytes; one-byte/trailing-newline/post-review-commit mutations. Human approval of the plan is judgement evidence. |
+| AI-first allocation and human authority | Instruction/human judgement only; the release gate checks required evidence slots, not whether agents truly behaved AI-first. State this in `AGENTS.md`, workflow and ADR-0002. |
+| Right-sized factors/split schema | `check_right_sized_work_item_fixture()`; remove each factor and independent-verification field. Actual cohesion and material-scope approval are Planner/human judgement, labelled in the workflow. |
+| AI Reviewer independence/original-issue reading | Artifact/hash and report fields are validated; actual independence is Reviewer/human judgement, stated in the Reviewer prompt and workflow. |
+| Named-human review | `validate_release_gate()` rejects missing human provenance, AI identity and wrong head; genuine human independence remains attested human judgement, stated in the ledger template. |
+| Model/provider/thinking | Required/unknown-field mutations; actual identity truth and privacy/reasoning-trace exclusion are reviewer-inspected limits stated in the contract. |
+| Evidence identity/freshness/disagreement | Wrong issue/task/criterion/artifact, stale, conflicting and blocked mutations. Semantic evidence sufficiency remains human judgement, stated in the feedback contract. |
+| Decisions/pending proposals/final boolean | Remove each escalation loop and each required-input check; named-human resolution authenticity remains judgement evidence. |
+| CI YAML contract | `check_ci_workflow_contract()` mutations plus `jactionlint`. Actual job/step/log meaning, cancellation and SHA binding are inspected, not claimed by static text checks; state this in validation docs. |
+| Delegation packet | Canonical-template/link and required-field mutations. Context sufficiency, concision and actual missing-context requests are instruction/human judgement, explicitly labelled in both linking documents. |
+| Ownership/scratch/handover | Overlap/disjoint/role/stale-handover/shared-scratch mutations. Real write obedience and filesystem isolation are instruction-only and stated as unenforced in `AGENTS.md` and workflow. |
+| ADR baseline/proposal rules | Existing ADR signature/status mutations plus pending-proposal release mutations. Human acceptance remains external approval evidence. |
+
+### ADR impact (F8)
+
+Amend `docs/adr/ADR-0002-project-specific-multi-agent-development-workflow.md` as a proposal with the nine new principles and their honest limits; do not rewrite ADR-0003's bootstrap decision. The old `5116b645...` fingerprint and readiness verdicts are historical. The reviewed plan-only ledger commit is the immutable plan head; subsequent ledger-only commits trigger AC-VB1 revalidation.
+
+The string `adr:ADR-0002:conflicts:ADR-0001` comes from the synthetic ADR fixture, not the real ADR-0002 (`conflicts-with: []`). Keep it as fixture behaviour; never "resolve" it by editing an accepted ADR. Real proposals stay effective proposals until human-approved merge, and all pending proposals block the live release gate.
+
+### Carry-forward re-verification at the final gate (F11)
+
+The review named eight IDs but called for nine impeached originals and twelve others. AC-D4 is therefore included as the ninth: the earlier external review explicitly impeached it, and the follow-up's live-baseline/PR-inventory findings keep its concerns open. This yields nine plus twelve across the 21 originals.
+
+| Impeached original | Final-head re-verification |
+| --- | --- |
+| AC-A2 | Re-run resolved permission matrices and harmless capability inspection; OD-ROLE and OD-BRANCH remain required human decisions, not covered by prose. |
+| AC-D2 | Verify explicit base SHA, legacy ADR-0003 mapping and actual live baseline result; no unearned PASS from fixtures or SKIP. |
+| AC-D3 | Re-run unchanged/changed ADR signature and open-PR status fixtures; real ADR-0001/0002/0003 remain proposals until merged and pending proposals block release. |
+| AC-D4 | Re-check issue/implementation links, preservation of accepted requirements and the corrected PR ADR inventory; OD-PR-INVENTORY requires owner approval and final-head read-back. |
+| AC-D5 | Assert every `decision_needed`, pending proposal and OD-* item escalates and blocks; close only with named-human evidence. |
+| AC-F4 | Reconcile all 30 criteria, every delegated report, current issue/task/criterion/artifact identity and the committed ledger; omitted criteria remain gaps. |
+| AC-F5 | Assert every gap receives verification or named-human resolution and every unresolved item forces false; successful unrelated checks cannot close it. |
+| AC-V2 | Re-run audit, all old/new offline fixtures and load-bearing mutations under trusted `ci`; actual CI evidence remains separately required. |
+| AC-V4 | Prove global config unchanged and Git/GitHub writes stayed with the Git Manager; reconcile final PR head, human-only merge and the open capability decisions. |
+
+| Other original | Re-affirmation at the final gate |
+| --- | --- |
+| AC-A1 | Discover exactly one Orchestrator and five specialists; no new agent. |
+| AC-A3 | Run the positive-language scan over every new/changed instruction (`Never`, `Do not`, imperative-negative remnants) and human-review constructive wording; permissions carry restrictions. |
+| AC-A4 | Re-check effective configurable model assignments and unchanged global configuration; report provenance does not pin repository models. |
+| AC-A5 | Re-run OpenCode v2.4.1 agent/config discovery after agent changes and record shared instruction loading. |
+| AC-D1 | Re-run ADR lifecycle/template fixtures; no lifecycle change. |
+| AC-F1 | Check the extended contract is loaded through `opencode.jsonc` for every agent. |
+| AC-F2 | Validate every required report field plus new provenance/artifact/evidence fields on final reports. |
+| AC-F3 | Require concrete delegation/planning/instructions/collaboration feedback in every final specialist report. |
+| AC-F6 | Re-check independent plan and AI code-review gates on their exact artifacts; AC-RV1 separately adds named-human review and original-issue/all-criteria independence. |
+| AC-V1 | Check the complete workflow, canonical links and documentation-versus-rules table against final text. |
+| AC-V3 | Scan final files/reports for credentials, private provider settings, local secrets and reasoning traces; confirm authorised locations unchanged. |
+| AC-V5 | Review the final changed-file set for workflow-only scope and record all deferred work. |
+
+### Deferred scope and closure index
+
+#33/#34, product implementation, additional agents, automatic model selection, live benchmarks/telemetry and advanced locking/scheduling remain deferred. OD-ROLE and OD-BRANCH implementation may stay with the human, but their decisions are open release blockers above, not silently deferred criteria.
+
+| Finding | Closing block(s) |
+| --- | --- |
+| F1 | Plan identity and freeze protocol; sequence step 1 |
+| F2 | Reconciliation disagreement rule and conflicting-case mutation |
+| F3 | Single boolean, complete required-item set, trusted `ci`/`all` split, sequence and CI binding |
+| F4 | Decisions/proposals rule and fixtures |
+| F5 | Open required decisions table |
+| F6 | Required-check taxonomy, CI binding and skipped-check rule |
+| F7 | Documentation-versus-rules contract; canonical delegation-packet rule |
+| F8 | Freeze protocol and ADR impact, including fixture-conflict provenance |
+| F9 | Human-slot rule, boolean and final live re-run |
+| F10 | Nine-factor sizing table and bidirectional dependency |
+| F11 | Nine impeached-original and twelve other-original final-gate tables, including AC-A3 |
 
 ## Reports reconciled
 
@@ -99,6 +313,9 @@
 | Implementer | Write the handover texts | Completed | 2026-11-27 | Wrote the replacement pull-request description (8,688 bytes) and the point-by-point review answer (5,790 bytes) under `.tmp/handover/`, applied the Orchestrator's date correction (CI decision 2026-11-26, not 27), and touched no tracked file. |
 | Git Manager | Handover step 2: commit the delta and the ledger | Completed | 2026-11-27 | `32977e1` (five files, +160/−72, staged to exactly the reviewed pathspec) and `5f55d0e` (ledger only). The staged diff re-hashed to `5116b645…` before committing, and the fingerprint was unchanged after the ledger commit. `Refs #30` appended to both messages, matching the repository style. No push in this step. |
 | Git Manager | Handover step 3: push, description and review answer | Completed | 2026-11-27 | `git push origin issue-30-multi-agent-development-workflow` fast-forwarded `97fd890..5f55d0e` (three commits; `c9fc085` was also local-only, contrary to the packet). The description and the review answer were applied through the GitHub MCP server after the literal `gh pr edit`/`gh pr comment` forms resolved to deny, and both read back byte-identically. `.tmp/handover/` removed; `.idea/` untouched; no merge, no force, no branch-protection change. |
+| Planner | Plan revision 1 for the 30-criterion baseline (`issue-30-baseline-30`) | Completed | 2026-11-27 | Nine newly added criteria mapped to three sequential work items with a criterion-to-file map, fixture strategy and ADR-impact note; recorded the nine as missing or partial and carried the 21 originals on a single baseline line |
+| Reviewer | Independent plan review of revision 1 (`issue-30-plan-review-30`) | Completed | 2026-11-27 | `plan changes required` with F1–F11. Confirmed the three-work-item split and the sequence as dependency-correct and defensible, and that amending the ADR-0002 proposal (not a new ADR, not docs-only) is correct. Found the plan was an uncommitted working-tree section with no immutable identity, that 8 of the 21 originals are impeached and carried without re-planning, that disagreement precedence, `decision_needed`, pending proposals and a complete required-item set were unspecified, and that P1-2/P2-5 disappeared behind "Out of scope". Plan identity `e740c9b3…` over the uncommitted section |
+| Planner | Plan revision 2 (`issue-30-baseline-30-r2`) | Completed | 2026-11-27 | Closes F1–F11 as a drop-in section: freeze protocol and plan identity, single `release_ready` boolean with the complete required-item set, disagreement/precedence and decision rules, required-check taxonomy, CI binding with `fetch-depth: 0`, four open required decisions (OD-ROLE, OD-BRANCH, OD-ADR-LIVE, OD-PR-INVENTORY), nine-factor sizing, a documentation-versus-rules table and the carry-forward re-verification of 21 originals. Candidate section `474f2c07…`, 23,784 bytes |
 
 The commits and the reconciliation merge were verified in sequence. The
 frozen-diff reviews cover `498444c`, the delta reviews cover `4d3f6dc`, the
@@ -113,6 +330,36 @@ the frozen tree `5116b645…`, and the Git handover then pushed and published it
 The synthetic reports are fixtures, not reports from real subagent sessions for
 this issue. They validate the reconciliation rules. The pull request is subject
 to the independent review and human-approval gate before merge.
+
+### Agent model provenance (AC-PV1)
+
+Repository files pin no model and hold no credential, so a model change produces
+no diff and no fingerprint change. The effective assignment is read from the
+global configuration with `opencode debug agents` and was checked on
+2026-11-27:
+
+| Role | Effective model | Note |
+| --- | --- | --- |
+| orchestrator | `console-ollama/deepseek-v4.1-flash` | unchanged |
+| planner | `opencode/gemini-4-hydrogen` | switched 2026-11-27 for cost reasons; revisions 1 and 2 were `console-ollama/kimi-k3.1-pro` |
+| reviewer | `console-ollama/hy4` | unchanged |
+| implementer | `console-ollama/deepseek-v4.1-flash` | switched 2026-11-27; a `depseek` typo was caught by the provenance check and corrected the same day |
+| tester | `console-ollama/deepseek-v4.1-flash` | switched 2026-11-27 |
+| git-manager | `console-ollama/deepseek-v4.1-flash` | unchanged |
+
+The human switched the Implementer and the Tester from `glm-5.3-flash` to
+`deepseek-v4.1-flash` on 2026-11-27. Reports from earlier rounds therefore carry
+GLM provenance and reports from WI-EV onwards carry DeepSeek provenance. Both
+stay valid evidence for the round that produced them; AC-PV1 requires each report
+to state its own model and provider rather than assuming the current assignment.
+
+The Planner moved from `console-ollama/kimi-k3.1-pro` to
+`opencode/gemini-4-hydrogen` on 2026-11-27 for cost reasons, chosen over the
+same model served as `console-openrouter/google/gemini-4-hydrogen` so the
+billing stays with the OpenCode provider. Plan revisions 1 and 2 are kimi-authored; a revision
+3, if the plan review requires one, is authored by the new assignment and must
+name it in its report. The section hash, not the author, is the identity that
+binds implementation to the plan.
 
 ## Findings and resolutions
 
@@ -200,6 +447,10 @@ to the independent review and human-approval gate before merge.
 | High | Git Manager finding during the handover push: the GitHub MCP server exposed `merge_pull_request` and `update_pull_request_branch` to the session, although the workflow and the shell rules reserve merging for the human. No agent merged, but the capability sits outside the control that the documentation describes. | Escalated, not silently accepted: this is the concrete case behind the open R-3 decision on per-role tool and MCP lockdown. The pull-request description lists that lockdown as an open architecture decision rather than a solved control. | Escalated to human |
 | Medium | Git Manager finding: `gh pr edit*`, `gh pr comment*` and `git fetch*` are allowed in `.opencode/agents/git-manager.md`, but the literal forms resolved to `deny` in the session. The two GitHub writes were therefore applied through the MCP server, and the pre-push remote state could not be refreshed. | Recorded, not fixed in the reviewed diff: the effective policy is stricter than the intent, and the workaround used a channel the role rules do not describe. A permission-model pass should either make the allows effective or remove them and describe the MCP path explicitly. | Open follow-up |
 | Low | Git Manager finding: the delegation said the branch was two commits ahead of the remote; it was three, because `c9fc085` was also local-only. | Corrected in the record: the push `97fd890..5f55d0e` carried three commits, all of them covered by the recorded approval (review-delta commit, ledger commit, push). The description and the review answer referred to the final state, not to a commit count. | Resolved by record |
+| Low | Model-provenance check during the human's Implementer/Tester switch: `opencode debug agents` reported `console-ollama/depseek-v4.1-flash` for the Implementer. This was a typo rather than a model variant — `opencode models` contains no `depseek` entry — so the configured assignment could not resolve and the WI-EV delegation would have opened on a broken model. | The human corrected the entry on 2026-11-27. A re-read of `opencode debug agents` reports `console-ollama/deepseek-v4.1-flash` for orchestrator, implementer, tester and git-manager, with planner and reviewer unchanged, and `opencode models` confirms no `depseek` entry exists. The effective assignment is recorded in the provenance table above so AC-PV1 makes the same check repeatable. | Resolved |
+| Medium | Ledger self-check before the freeze commit: the Architecture baseline section claimed the validator escalates `adr:ADR-0002:conflicts:ADR-0001` because "ADR-0002 declares a conflict with the not-yet-accepted ADR-0001". The real `docs/adr/ADR-0002-project-specific-multi-agent-development-workflow.md` carries `conflicts-with: []`; the escalation comes from `docs/validation/fixtures/adr/open-pr/ADR-0002-declared-accepted.md`, and the recorded capture holds two fixture scenarios, escalating against `ADR-0001` and against `ADR-0003`. | Corrected in place with the fixture path named, so the line is not read as a real conflict and cannot invite an agent to "resolve" it by editing an accepted ADR. The plan's own ADR-impact block already stated this correctly, which is how the mismatch surfaced. | Resolved |
+| Informational | Plan revision 2 was inserted as a drop-in and verified byte-exact: section SHA-256 `474f2c07a443ea74bf3fb144db52f2a0b67af466c401f9f28e3526163e4f2ce1` equals the Planner's candidate, length 23,784 bytes, half-open range `[13564, 37348)`, section ends `\n\n`. | Recorded so the freeze commit can be re-hashed independently. The hash becomes plan identity only when the Reviewer approves the committed section and names the commit. | Recorded |
+| Low | The plan's extraction convention hashes up to "the first byte of the following `## Reports reconciled`", but that heading also occurs inside the section as inline code in the Extraction row. Measured on the current ledger: two occurrences, at byte `14160` (inline, inside the table cell) and `37348` (line-start heading); a naive `find` from the plan start returns `14160` and yields a 596-byte "section". | The recorded hash was computed with an anchored line-start match (`^## Reports reconciled$`) after the plan start and reproduces `474f2c07…`, so the artifact is unambiguous; only the wording is. Rewording it is a plan-content change and needs revision 3 plus a new plan review, so the Reviewer rules whether the anchored reading is reproducible enough or a revision is required. | Open, Reviewer to rule |
 
 ## Architecture baseline
 
@@ -213,10 +464,16 @@ to the independent review and human-approval gate before merge.
   (normalised bootstrap record). All three declare `status: Accepted` and are
   effectively `Proposed` while PR #32 is open; the validator reports exactly
   that mapping.
-- Conflicts: the validator escalates `adr:ADR-0002:conflicts:ADR-0001` because
-  ADR-0002 declares a conflict with the not-yet-accepted ADR-0001. Both are
-  proposals of this pull request, so the escalation resolves on the human merge
-  and is recorded rather than silently dropped.
+- Conflicts: none in the real records. ADR-0002's frontmatter carries
+  `conflicts-with: []`. The escalation `adr:ADR-0002:conflicts:ADR-0001` in the
+  recorded output belongs to the synthetic open-pull-request fixture
+  (`docs/validation/fixtures/adr/open-pr/ADR-0002-declared-accepted.md`), whose
+  ADR-0002 declares that conflict; the second scenario in the same capture
+  escalates against `ADR-0003` for the same reason. The distinction matters
+  because the escalation line reads as if the real proposal conflicted with a
+  sibling proposal, and it must not be "resolved" by editing an accepted ADR.
+  Both are proposals of this pull request, so the declared status resolves on
+  the human merge.
 - Decisions needed: human approval of ADR-0001, ADR-0002 and ADR-0003 through
   the pull request. Until that merge the accepted baseline stays limited to the
   bootstrap decision already in force on `main`.
@@ -229,6 +486,23 @@ to the independent review and human-approval gate before merge.
   itself is already in force through PR #31.
 - Independent human review and approval of this pull request are required
   before merge.
+- Open required decisions introduced by plan revision 2. Each one forces
+  `release_ready=false` until the human closes it, and none may be deferred
+  silently behind "out of scope":
+  - `OD-ROLE` — per-role tool and MCP lockdown. The GitHub MCP server exposed
+    `merge_pull_request` and `update_pull_request_branch` during the handover
+    push, so shell permission matrices cannot close this on their own. The owner
+    chooses the boundary; a harmless capability inspection on the final head
+    verifies it.
+  - `OD-BRANCH` — repository-side branch protection: required human review, no
+    force push and no direct push. Agents do not change repository settings; the
+    record names the human and the settings evidence.
+  - `OD-ADR-LIVE` — live ADR baseline. A verified explicit base SHA, or the
+    owner's explicit recorded decision, must produce an inspected pass. A
+    synthetic fixture or a `SKIP` line cannot close it.
+  - `OD-PR-INVENTORY` — the pull-request description's accepted-baseline and
+    proposal inventory. The owner approves the inventory and the Git Manager
+    updates and reads it back on the final head.
 - Configuration discovery was verified against the local OpenCode v2.4.1 and
   the existing global model assignments. A different OpenCode version or model
   configuration may require a repeated discovery check.
