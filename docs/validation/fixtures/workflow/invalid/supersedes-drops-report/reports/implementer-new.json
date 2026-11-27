@@ -1,0 +1,35 @@
+{
+  "agent": "implementer",
+  "issue": 30,
+  "task_id": "issue-30-implementation-r2",
+  "status": "Partial",
+  "supersedes": ["issue-30-implementation"],
+  "completed_work": [
+    "Second-round implementation report that replaces the first round."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "unverified",
+      "evidence": ["docs/workflow/feedback-contract.md"],
+      "notes": "The re-done work changed the contract; independent verification is pending."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

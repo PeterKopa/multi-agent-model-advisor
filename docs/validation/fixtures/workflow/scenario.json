@@ -2,6 +2,11 @@
   "description": "Synthetic reports for offline feedback reconciliation. The planner intentionally omits AC-03, AC-07 is never delegated, AC-05 is unverified, and ADR-0002 is a proposal in an open pull request.",
   "issue": 30,
   "criteria_file": "criteria.json",
+  "tasks": {
+    "planner": "issue-30-planning",
+    "implementer": "issue-30-implementation",
+    "reviewer": "issue-30-plan-review"
+  },
   "reports": [
     "reports/planner.json",
     "reports/implementer.json",

@@ -75,3 +75,4 @@ The original record, merged with PR #31, does not name rejected alternatives for
 
 - 2026-11-26: The decision was approved and merged with PR #31 and is in force on the default branch.
 - 2026-11-26: The record was renamed from `docs/adr/0001-go-bubble-tea-bootstrap.md` to `ADR-0003` and given frontmatter by PR #32 (issue #30) to follow the ADR directory convention; the decision text is unchanged.
+- 2026-11-26: During the PR #32 review the repository owner explicitly confirmed `status: Accepted`; the confirmation is recorded in the PR #32 review thread and in `docs/workflow/ledgers/issue-30.md` (`P1 (external R-2)`): the bootstrap decision has been in force on the default branch since PR #31, and PR #32 only normalises the file name and frontmatter of this record.

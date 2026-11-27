@@ -58,40 +58,64 @@ loaded into every agent through `opencode.jsonc`.
 - Keep credentials, personal provider configuration and private account details
   in their authorised local locations. Repository files contain placeholders,
   model-agnostic defaults and non-secret configuration only.
-- Never read or write credential stores or secret files — `~/.ssh/`, `~/.aws/`,
-  `~/.gnupg/`, `~/.config/gh/`, `~/.local/share/opencode/auth.json` and every
-  `*.env` / `*.env.*` file except an `.env.example` or `*.env.example`
-  template, if present. The permission
-  policy denies file access to them and mirrors the same locations in shell
-  command strings.
-- Access outside the worktree requires approval. Paths outside the active
-  worktree resolve to `ask` for the `external_directory` gate and for RTK
-  commands; `~/.config/opencode/*` stays local and is readable, editable and
-  reachable from shell command arguments on approval only.
-- Scratch work belongs under `.tmp/` inside the worktree and must be removed
-  before the task reports back. Do not copy test material to `/tmp` or the home
-  directory.
-- Use RTK for output condensing, never to bypass permissions: `rtk git ...` and
-  `rtk gh ...` mirror the plain `git`/`gh` rules one-to-one, the RTK file and
-  report tools are allowed, but `rtk test`, `rtk err` and `rtk summary` execute
-  hidden commands and are denied; `rtk bypass` and `rtk proxy` ask. Filtered
-  Go quality runs are the exception: `rtk test` may wrap `govulncheck`,
-  `golangci-lint` and `jactionlint` through the narrow allow patterns, and the
-  nested-write denials still win over them.
-- The Go quality toolchain is allowed directly: `go`, `govulncheck`,
-  `golangci-lint` and `jactionlint`. Infrastructure, cluster, cloud, database
-  and network tools (`docker`, `kubectl`, `oc`, `aws`, `psql`, `wget`, and
-  their RTK mirrors) ask for approval; `pnpm`, `dotnet` and their RTK mirrors
-  are denied.
-- Merging a pull request is reserved for the human user: `gh api` is denied
-  project-wide and `gh pr merge` is denied for every agent. Direct pushes to
-  `main` are denied even for the Git Manager.
+- Read and write only the locations the permission policy approves. Credential
+  and secret stores stay untouched because the permission policy denies file
+  access to `~/.ssh/`, `~/.aws/`, `~/.gnupg/`, `~/.config/gh/`,
+  `~/.local/share/opencode/auth.json` and every `*.env` / `*.env.*` file, and
+  mirrors the same locations in shell command strings; an `.env.example` or
+  `*.env.example` template, if present, is the approved exception — readable
+  for every role, and editable by the role that may edit files (the
+  Implementer; every other role denies `edit` in its own agent rules).
+- Keep all file writes inside the active worktree. Work outside the worktree is
+  available on approval: paths outside the active worktree resolve to `ask` for
+  the `external_directory` gate and for RTK commands, and `~/.config/opencode/*`
+  stays local and is readable, editable and reachable from shell command
+  arguments on approval only.
+- Treat `.tmp/` inside the worktree as the approved scratch location and remove
+  its contents before the task reports back. Keep test material inside the
+  worktree so every path the task touches stays inside the approved boundary.
+- Use RTK for output condensing as a permission-mirroring convenience:
+  `rtk git ...` and `rtk gh ...` mirror the plain `git`/`gh` rules one-to-one
+  and the RTK file and report tools are allowed. The plain `go` commands and
+  the narrowly filtered quality runs (`rtk test` wrapping `govulncheck`,
+  `golangci-lint` or `jactionlint`, with the nested-write denials still
+  winning) are the approved filtered paths; `rtk test`, `rtk err` and
+  `rtk summary` execute hidden commands and stay denied, while `rtk bypass`
+  and `rtk proxy` remain escape hatches that require approval.
+- Use the Go quality toolchain directly: `go`, `govulncheck`, `golangci-lint`
+  and `jactionlint`. Infrastructure, cluster, cloud, database and network tools
+  (`docker`, `kubectl`, `oc`, `aws`, `psql`, `wget`, and their RTK mirrors) run
+  on approval, and `pnpm`, `dotnet` and their RTK mirrors stay outside the
+  approved set.
+- Treat pull-request merging as the human user's responsibility. The approved
+  handover is: the Git Manager prepares branch, commits and pull request after
+  the Orchestrator confirms the gates and the human approves; the human merges.
+  `gh api` and `gh pr merge` stay denied for every agent, and direct pushes to
+  `main` are denied even for the Git Manager. Pushes are controlled by an
+  allowlist, not a deny category: the Git Manager may push only
+  `git push origin <refspec>` (or `git push origin HEAD`), in plain and RTK
+  form — there is no push to another remote name, and any push without an
+  explicit refspec does not match the allow and falls back to the project-level
+  `git *` deny instead of a bare or remote-only allow. Because the Git
+  Manager's own allows can override every project deny, its rules re-create
+  the second deny layer: every option-bearing push — any argument starting
+  with `-`, so no force spelling, `--mirror`, `--all`, `--delete`, `-u`,
+  `--follow-tags`, `--quiet` or `--dry-run` in any position — is re-denied
+  after the allow; a `+`-prefixed refname is denied as a side effect of the
+  `+` blanket rule.
 - Use project configuration for shared workflow settings and keep personal model
   assignments in the global OpenCode configuration. See
   [`docs/workflow/model-assignments.md`](docs/workflow/model-assignments.md).
-- Prefer offline, deterministic checks for workflow validation. The workflow
-  validator runs without network access or credentials:
+- Prefer offline, deterministic checks for workflow validation, and run them in
+  the trusted order without network access or credentials:
+  `python3 tools/audit_validator.py` and then
   `python3 tools/workflow_check.py all`.
 - Keep German and English user-facing product terminology consistent with the
   existing documentation. Workflow and engineering documentation stays in
   English.
+
+The permission model in `opencode.jsonc` is a guardrail with default-allow,
+not a sandbox: named denies and approval gates bound the listed commands and
+paths, while role discipline, the review gates and the human-approved handover
+complete the control set. Report an observed guardrail gap to the human owner
+and escalate it in the ledger instead of working around it.

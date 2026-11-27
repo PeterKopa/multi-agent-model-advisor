@@ -55,6 +55,8 @@
     { "action": "shell", "resource": "rtk git shortlog*", "effect": "allow" },
     { "action": "shell", "resource": "git merge-base*", "effect": "allow" },
     { "action": "shell", "resource": "rtk git merge-base*", "effect": "allow" },
+    { "action": "shell", "resource": "git rev-list*", "effect": "allow" },
+    { "action": "shell", "resource": "rtk git rev-list*", "effect": "allow" },
 
     // b) Read-only GitHub inspection stays available in both forms.
     { "action": "shell", "resource": "gh pr view*", "effect": "allow" },
@@ -101,6 +103,14 @@
     { "action": "shell", "resource": "rtk deps*", "effect": "allow" },
     { "action": "shell", "resource": "rtk gain*", "effect": "allow" },
     { "action": "shell", "resource": "rtk methods*", "effect": "allow" },
+
+    // b) Shell conveniences. `ls` stays available in plain form; `cat` asks
+    //    for approval because it can also copy files with a redirect and reach
+    //    arbitrary paths. The credential shell mirrors further below still win
+    //    by last-match, and `*.env.example` stays explicitly readable. The
+    //    surrounding model is a guardrail with default-allow, not a sandbox.
+    { "action": "shell", "resource": "ls *", "effect": "allow" },
+    { "action": "shell", "resource": "cat *", "effect": "ask" },
 
     // Go quality toolchain. Plain and filtered runs below; the project has no
     // gofmt-only or vendored build steps that need broader writes.
@@ -222,14 +232,16 @@
     { "action": "edit", "resource": "*.env.example", "effect": "allow" },
 
     // Shell mirrors of the credential denials above, so command strings such
-    // as "cat ~/.ssh/id_rsa" cannot bypass the file tools. The last mirror is
-    // the personal OpenCode configuration: it asks, never denies, because the
-    // owner requires that location to stay approval-only.
-    { "action": "shell", "resource": "*/.ssh/*", "effect": "deny" },
-    { "action": "shell", "resource": "*/.aws/*", "effect": "deny" },
-    { "action": "shell", "resource": "*/.gnupg/*", "effect": "deny" },
-    { "action": "shell", "resource": "*/.config/gh/*", "effect": "deny" },
-    { "action": "shell", "resource": "*/.kube/*", "effect": "deny" },
+    // as "cat ~/.ssh/id_rsa" cannot bypass the file tools. The mirrors use a
+    // prefix form (no trailing slash): plain shell has no path-scoped gate, so
+    // a bare listing such as "ls ~/.ssh" must be denied as well. The last
+    // mirror is the personal OpenCode configuration: it asks, never denies,
+    // because the owner requires that location to stay approval-only.
+    { "action": "shell", "resource": "*/.ssh*", "effect": "deny" },
+    { "action": "shell", "resource": "*/.aws*", "effect": "deny" },
+    { "action": "shell", "resource": "*/.gnupg*", "effect": "deny" },
+    { "action": "shell", "resource": "*/.config/gh*", "effect": "deny" },
+    { "action": "shell", "resource": "*/.kube*", "effect": "deny" },
     { "action": "shell", "resource": "*/.docker/config.json*", "effect": "deny" },
     { "action": "shell", "resource": "*/.netrc*", "effect": "deny" },
     { "action": "shell", "resource": "*/.git-credentials*", "effect": "deny" },
@@ -238,7 +250,7 @@
     { "action": "shell", "resource": "*/.local/share/opencode/auth.json*", "effect": "deny" },
     { "action": "shell", "resource": "*/.local/share/opencode/opencode.db*", "effect": "deny" },
     { "action": "shell", "resource": "*/.local/share/opencode/log/*", "effect": "deny" },
-    { "action": "shell", "resource": "*Library/Keychains/*", "effect": "deny" },
+    { "action": "shell", "resource": "*Library/Keychains*", "effect": "deny" },
     { "action": "shell", "resource": "*.env*", "effect": "deny" },
     { "action": "shell", "resource": "*.env.example", "effect": "allow" },
     { "action": "shell", "resource": "*/.config/opencode/*", "effect": "ask" },

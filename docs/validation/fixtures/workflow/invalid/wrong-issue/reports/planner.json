@@ -1,0 +1,34 @@
+{
+  "agent": "planner",
+  "issue": 999,
+  "task_id": "issue-30-planning",
+  "status": "Completed",
+  "completed_work": [
+    "Prepared the acceptance-criteria plan for a different issue than the scenario declares."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-01",
+      "coverage": "covered",
+      "evidence": ["docs/workflow/development-workflow.md"],
+      "notes": "Valid shape apart from the mismatched issue number."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

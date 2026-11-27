@@ -1,0 +1,12 @@
+{
+  "description": "Invalid report fixture: a coverage entry marked covered whose evidence entries are all vacuous sentinels ('none') must be rejected by validate_report. The feedback contract uses 'none' as the explicit no-content sentinel, so the entry is treated as absent and the covered claim is unsupported.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "tasks": {
+    "implementer": "issue-30-implementation"
+  },
+  "reports": ["reports/implementer.json"],
+  "invalid": {
+    "error": "is marked covered without evidence"
+  }
+}

@@ -11,10 +11,18 @@ The validator checks four things without network access or credentials:
    scanner-based shell permission model;
 2. ADR baseline handling when an open pull request declares an ADR accepted,
    including reference and identifier validation for the ADR links;
-3. feedback reconciliation with synthetic reports, including an omitted
-   criterion, an unverified criterion and a proposed ADR conflict, asserted
-   against the exact expected gap and escalation sets;
+3. feedback reconciliation with synthetic reports — scenario identity (issue
+   and task per agent), ``covered`` claims backed by evidence whose vacuous
+   sentinel items (``none`` and friends) count as absent, a note for
+   ``not_applicable``, disagreement gaps for contradictory coverage values,
+   supersession scoped to the same agent's declared tasks and required to be
+   acyclic, and invalid negative fixtures, asserted against the exact
+   expected gap and escalation sets;
 4. permission fixtures that reject over-broad agent allow rules.
+
+Every ``all`` run starts by auditing this file: ``check_self_audit()`` loads
+the sibling ``tools/audit_validator.py`` and statically bounds the constructs
+this module may use before any result is trusted.
 """
 
 from __future__ import annotations
@@ -75,6 +83,7 @@ GIT_READ_COMMANDS = [
     "log",
     "show",
     "rev-parse",
+    "rev-list",
     "ls-files",
     "ls-tree",
     "blame",
@@ -149,7 +158,8 @@ OUTSIDE_WORKTREE_ASK_SAMPLES = [
 
 # Credential, secret and env locations. Read, edit and external_directory deny
 # the home-relative paths; shell command strings are blocked through the
-# leading-wildcard mirrors in the project policy.
+# leading-wildcard mirrors in the project policy. The mirrors use a prefix
+# form so the directory itself cannot be enumerated either (ls ~/.ssh).
 SENSITIVE_PATH_SAMPLES = [
     "~/.ssh/id_rsa",
     "~/.aws/credentials",
@@ -185,11 +195,25 @@ SENSITIVE_SHELL_SAMPLES = [
     "cp ~/Library/Keychains/login.keychain-db x",
     "cat .env",
     "cat config/.env.local",
+    "ls ~/.ssh",
 ]
 # Env templates are not tracked in the repository, but the policy re-enables
 # an `*.env.example` template if one is present, so the shell allow must stay
 # proven. Dead-code guard: every sample in this list must be asserted.
 ENV_ALLOW_SHELL_SAMPLES = ["cat .env.example", "cat config/.env.example"]
+
+# Plain `ls` is an explicitly allowed read-only convenience; `cat` asks for
+# approval because it can also copy files with a redirect and reach arbitrary
+# paths. The credential shell mirrors sit later in the rule list and still win
+# by last-match (cat ~/.ssh/id_rsa and ls ~/.ssh deny; *.env.example stays
+# explicitly readable), so these samples pin the full ladder.
+READONLY_SHELL_UTILITY_SAMPLES = ["ls -la"]
+ASK_SHELL_UTILITY_SAMPLES = ["cat opencode.json"]
+
+# "echo ok" resolves to default allow, no explicit rule. The sample documents
+# that honest boundary — echo is a write primitive through > and >> and is
+# deliberately not presented as read-only.
+DEFAULT_ALLOW_SHELL_SAMPLES = ["echo ok"]
 
 TOOLCHAIN_DENY_SAMPLES = ["pnpm install", "rtk pnpm install", "dotnet build", "rtk dotnet build"]
 WRAPPER_DENY_SAMPLES = ["rtk test pytest", "rtk err ls", "rtk summary ls"]
@@ -232,11 +256,12 @@ COMPOUND_PROTECTED_DENY_SAMPLES = [
 
 # Compounds every extracted subcommand of which resolves to allow: read-only
 # inspection for all agents, and for the Git Manager a legitimate chained write
-# that must not break (git add/commit followed by a push to a feature branch).
+# that must not break (git add/commit followed by an explicit remote-and-
+# refspec push to a feature branch — no upstream option, per the push model).
 HARMLESS_COMPOUND_ALLOW_SAMPLES = ["git status --short && git diff"]
 COMPOUND_GIT_MANAGER_ALLOW_SAMPLES = [
     "git add . && git push origin HEAD",
-    "git commit -m x && git push -u origin issue-30-multi-agent-development-workflow",
+    "git commit -m x && git push origin issue-30-multi-agent-development-workflow",
 ]
 
 # The personal OpenCode configuration is reachable from shell arguments too.
@@ -255,14 +280,120 @@ PUSH_TO_MAIN_DENY_SAMPLES = [
     "rtk git push origin HEAD:main",
 ]
 
+# Unsafe push forms stay denied even for the Git Manager, in plain and RTK
+# form. The base layer is the Git Manager's narrow allow ("git push origin ?*"
+# only): the "?" matches exactly one character, so pushes that do not name
+# origin with a non-empty refspec cannot match it. For
+# option-bearing pushes the deny model is one shape: every option-bearing push
+# (an argument starting with "-", wherever it sits after the verb, which
+# subsumes all force spellings, mirror, --all, --delete and the quiet/dry-run
+# forms) denies in the agent layer as the second line; the pinned long
+# spellings and the measured bypass spellings (-ud, -vd, -uvqf, -q, --quiet,
+# --dry-run) pin the regression that motivated the model. The remote-only and
+# other-remote shapes are proven below as fall-through cases: they match no
+# Git Manager allow, so the project-level "git *" deny decides them.
+UNSAFE_PUSH_DENY_SAMPLES = [
+    "git push",
+    "git push origin",
+    "git push --force origin main",
+    "git push --force-with-lease origin main",
+    "git push --mirror",
+    "git push --all",
+    "git push --delete origin feature",
+    "git push --follow-tags",
+    "git push --dry-run",
+    "git push --quiet",
+    "git push -q",
+    "git push -f",
+    "git push -f origin HEAD",
+    "git push origin -f HEAD",
+    "git push -uf origin issue-42-fix",
+    "git push -vf HEAD",
+    "git push -qf origin feature",
+    "git push origin -qf feature",
+    "git push -dv origin feature",
+    "git push -ud origin feature",
+    "git push -vd origin feature",
+    "git push -uvqf origin feature",
+    "git push :feature",
+    "git push origin :feature",
+    "git push origin +main",
+    "git push origin +HEAD",
+    # Option-after-refspec orderings under the narrow origin allow: the
+    # allowlist cannot match these (an option inside the arguments), and both
+    # deny shapes must still win with allow-then-deny ordering.
+    "git push origin --force feature",
+    "git push origin feature+1",
+    "rtk git push",
+    "rtk git push origin",
+    "rtk git push --force origin main",
+    "rtk git push --force-with-lease origin main",
+    "rtk git push --mirror",
+    "rtk git push --all",
+    "rtk git push --delete origin feature",
+    "rtk git push --follow-tags",
+    "rtk git push --dry-run",
+    "rtk git push --quiet",
+    "rtk git push -q",
+    "rtk git push -f",
+    "rtk git push -f origin HEAD",
+    "rtk git push origin -f HEAD",
+    "rtk git push -uf origin issue-42-fix",
+    "rtk git push -vf HEAD",
+    "rtk git push -qf origin feature",
+    "rtk git push origin -qf feature",
+    "rtk git push -dv origin feature",
+    "rtk git push -ud origin feature",
+    "rtk git push -vd origin feature",
+    "rtk git push -uvqf origin feature",
+    "rtk git push :feature",
+    "rtk git push origin :feature",
+    "rtk git push origin +main",
+    "rtk git push origin +HEAD",
+]
+
+# Non-origin remotes and the remote-only shape. Under the narrow
+# "git push origin ?*" allow these match no Git Manager allow rule at all, so
+# the project-level "git *" deny decides them; the samples pin that
+# fall-through instead of an agent deny rule, which the narrow allow makes
+# unreachable as a deciding rule for these shapes. The trailing-space
+# spellings pin the whitespace edge: fnmatch's "?" needs one character after
+# "origin", so a command that ends directly after the remote (even with a
+# trailing space left by an upstream scanner) does not complete the allow.
+NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES = [
+    "git push upstream",
+    "git push github",
+    "git push upstream main",
+    "git push origin ",
+    "rtk git push upstream",
+    "rtk git push github",
+    "rtk git push origin ",
+]
+
+# Read-only commit enumeration stays available for every agent in both forms.
+REV_LIST_ALLOW_SAMPLES = ["git rev-list HEAD", "rtk git rev-list HEAD"]
+
 # Write commands the Git Manager owns, in plain and RTK form. Other agents are
 # denied; pushes to main are handled by PUSH_TO_MAIN_DENY_SAMPLES above and are
-# therefore excluded here.
+# therefore excluded here, and push shapes outside the allowlist are handled by
+# UNSAFE_PUSH_DENY_SAMPLES and NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES. Every push
+# in this list names origin with an explicit, non-empty refspec — the single
+# shape the narrow "git push origin ?*" allow admits (the "?" matches exactly
+# one character, so a whitespace-only tail cannot match) — without any option
+# (the model denies option-bearing pushes). The samples include the
+# preserved-allow cases from the model change: a refspec with a
+# leading-dash-free branch name, a colon refspec to a feature branch, a branch
+# name containing an internal dash and the letter f, and the double-space
+# spelling "git push origin  HEAD", where the extra space is the one character
+# the "?" matches and the refspec itself is non-empty.
 GIT_MANAGER_WRITE_COMMANDS = [
     "git add .",
     "git commit -m test",
     "git push origin HEAD",
-    "git push -u origin issue-30-multi-agent-development-workflow",
+    "git push origin issue-30-multi-agent-development-workflow",
+    "git push origin feature-f",
+    "git push origin HEAD:refs/heads/feature",
+    "git push origin  HEAD",
     "git merge main",
     "git rebase main",
     "git checkout -b feature",
@@ -274,13 +405,29 @@ GIT_MANAGER_WRITE_COMMANDS = [
     "rtk git branch feature",
     "rtk git checkout -b feature",
     "rtk git commit -m test",
+    "rtk git push origin HEAD",
     "rtk git push origin issue-30-multi-agent-development-workflow",
+    "rtk git push origin feature-f",
+    "rtk git push origin HEAD:refs/heads/feature",
+    "rtk git push origin  HEAD",
     "rtk git switch -c feature",
     "rtk gh pr create --title test",
 ]
 
 # Deny rules that must appear in the Git Manager frontmatter after every allow
-# rule, so they win under last-match-wins resolution.
+# rule, so they win under last-match-wins resolution. The push denies follow
+# the narrow-allow model: option-bearing pushes ("git push -*" and
+# "git push * -*" catch any argument starting with "-", plain and RTK) are the
+# agent-level second layer; the main/heads-main rules and the blanket
+# "+"/":" rules deny force and delete refspecs and pushes to main. No rule in
+# this list matches on "?", so no flag-cluster pattern can misfire on branch
+# names; the only "?" sits in the allow, where it demands a non-empty
+# refspec. The remote-only and other-remote push shapes carry no
+# deny rule of their own — under the narrow "git push origin ?*" allow they
+# match no allow rule and the project-level "git *" deny decides them, so an
+# agent-level rule would be unreachable as a deciding rule;
+# NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES pins those resolutions behaviourally,
+# including the trailing-space spellings.
 GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "gh api*",
     "gh pr merge*",
@@ -292,11 +439,33 @@ GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "rtk git push * main*",
     "rtk git push *:main*",
     "rtk git push *heads/main*",
-    "*/.ssh/*",
-    "*/.aws/*",
-    "*/.gnupg/*",
-    "*/.config/gh/*",
-    "*/.kube/*",
+    "git push -*",
+    "git push * -*",
+    "git push *--force*",
+    "git push *--mirror*",
+    "git push *--all*",
+    "git push *--delete*",
+    "git push *+main*",
+    "git push *+*",
+    "git push * :*",
+    "git push :*",
+    "git push",
+    "rtk git push -*",
+    "rtk git push * -*",
+    "rtk git push *--force*",
+    "rtk git push *--mirror*",
+    "rtk git push *--all*",
+    "rtk git push *--delete*",
+    "rtk git push *+main*",
+    "rtk git push *+*",
+    "rtk git push * :*",
+    "rtk git push :*",
+    "rtk git push",
+    "*/.ssh*",
+    "*/.aws*",
+    "*/.gnupg*",
+    "*/.config/gh*",
+    "*/.kube*",
     "*/.docker/config.json*",
     "*/.netrc*",
     "*/.git-credentials*",
@@ -305,7 +474,7 @@ GIT_MANAGER_REQUIRED_TRAILING_DENIES = [
     "*/.local/share/opencode/auth.json*",
     "*/.local/share/opencode/opencode.db*",
     "*/.local/share/opencode/log/*",
-    "*Library/Keychains/*",
+    "*Library/Keychains*",
     "*.env*",
 ]
 
@@ -751,11 +920,15 @@ def policy_expectations(agent: str) -> list[tuple[str, str, str]]:
     for command in GIT_READ_COMMANDS:
         add(("shell", f"git {command}", "allow"))
         add(("shell", f"rtk git {command}", "allow"))
+    for command in REV_LIST_ALLOW_SAMPLES:
+        add(("shell", command, "allow"))
     for command in GH_READ_COMMANDS:
         add(("shell", f"gh {command}", "allow"))
         add(("shell", f"rtk gh {command}", "allow"))
     for tool in RTK_REPORT_TOOLS:
         add(("shell", f"rtk {tool}", "allow"))
+    for command in READONLY_SHELL_UTILITY_SAMPLES + DEFAULT_ALLOW_SHELL_SAMPLES:
+        add(("shell", command, "allow"))
     add(("shell", "rtk read src/x.ts", "allow"))
     add(("shell", "rtk tree src", "allow"))
     for command in GO_QUALITY_SAMPLES + RTK_FILTERED_QUALITY_SAMPLES:
@@ -766,12 +939,15 @@ def policy_expectations(agent: str) -> list[tuple[str, str, str]]:
         + INFRA_ASK_RTK_SAMPLES
         + WRAPPER_ASK_SAMPLES
         + OUTSIDE_WORKTREE_ASK_SAMPLES
+        + ASK_SHELL_UTILITY_SAMPLES
     ):
         add(("shell", command, "ask"))
 
     for command in (
         SENSITIVE_SHELL_SAMPLES
         + PUSH_TO_MAIN_DENY_SAMPLES
+        + UNSAFE_PUSH_DENY_SAMPLES
+        + NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES
         + GH_API_DENY_SAMPLES
         + NESTED_WRITE_DENY_SAMPLES
         + COMPOUND_PROTECTED_DENY_SAMPLES
@@ -832,17 +1008,23 @@ def check_project_rules(rules: list[dict[str, Any]]) -> None:
     for command in GIT_READ_COMMANDS:
         expect("shell", f"git {command}", "allow")
         expect("shell", f"rtk git {command}", "allow")
+    for command in REV_LIST_ALLOW_SAMPLES:
+        expect("shell", command, "allow")
     for command in GH_READ_COMMANDS:
         expect("shell", f"gh {command}", "allow")
         expect("shell", f"rtk gh {command}", "allow")
     for tool in RTK_REPORT_TOOLS:
         expect("shell", f"rtk {tool}", "allow")
+    for command in READONLY_SHELL_UTILITY_SAMPLES + DEFAULT_ALLOW_SHELL_SAMPLES:
+        expect("shell", command, "allow")
     for command in GO_QUALITY_SAMPLES + RTK_FILTERED_QUALITY_SAMPLES:
         expect("shell", command, "allow")
 
     for command in (
         ["git add .", "git commit -m test", "git push origin HEAD"]
         + PUSH_TO_MAIN_DENY_SAMPLES
+        + UNSAFE_PUSH_DENY_SAMPLES
+        + NON_ORIGIN_REMOTE_PUSH_DENY_SAMPLES
         + ["git merge main", "git rebase main", "git reset --hard HEAD", "git filter-branch --force"]
         + ["gh pr create --title test", "rtk git add .", "rtk git commit -m test", "rtk gh pr create --title test"]
         + GH_API_DENY_SAMPLES
@@ -862,6 +1044,7 @@ def check_project_rules(rules: list[dict[str, Any]]) -> None:
         + INFRA_ASK_RTK_SAMPLES
         + WRAPPER_ASK_SAMPLES
         + OUTSIDE_WORKTREE_ASK_SAMPLES
+        + ASK_SHELL_UTILITY_SAMPLES
     ):
         expect("shell", command, "ask")
 
@@ -1055,10 +1238,12 @@ def check_config() -> None:
 
 
 def check_adr(
-    baseline: list[dict[str, Any]], open_pr: list[dict[str, Any]]
+    baseline: list[dict[str, Any]],
+    open_pr: list[dict[str, Any]],
 ) -> tuple[set[str], list[dict[str, Any]], list[dict[str, str]]]:
     baseline_ids, proposals, conflicts = evaluate_adrs(baseline, open_pr)
-    print(f"ADR baseline (merged, accepted): {sorted(baseline_ids) or '[]'}")
+    baseline_line = f"ADR baseline (merged, accepted): {sorted(baseline_ids) or '[]'}"
+    print(baseline_line)
     for proposal in proposals:
         print(
             "ADR proposal: "
@@ -1094,20 +1279,65 @@ def adr_signature(adr: dict[str, Any]) -> str:
     return json.dumps({key: adr.get(key) for key in keys}, sort_keys=True)
 
 
-def resolve_baseline_ref() -> str | None:
-    for ref in ("main", "origin/main"):
-        result = git("rev-parse", "--verify", ref)
-        if result.returncode == 0:
-            return ref
-    return None
+def resolve_baseline_ref() -> tuple[str | None, str | None]:
+    """Prefer ``origin/main`` and fall back to the local ``main``.
+
+    Returns ``(chosen_ref, warning)``. The warning is a line to print when
+    both refs exist and resolve to different commits: a local ``main`` can be
+    stale, so ``origin/main`` wins and the disagreement is reported instead
+    of silently trusted.
+    """
+    local = git("rev-parse", "--verify", "main")
+    origin = git("rev-parse", "--verify", "origin/main")
+    local_sha = local.stdout.strip() if local.returncode == 0 else None
+    origin_sha = origin.stdout.strip() if origin.returncode == 0 else None
+    if origin_sha is not None:
+        if local_sha is not None and local_sha != origin_sha:
+            return "origin/main", (
+                "WARN adr: local main "
+                f"{local_sha[:7]} differs from origin/main {origin_sha[:7]}; "
+                "using origin/main"
+            )
+        return "origin/main", None
+    if local_sha is not None:
+        return "main", None
+    return None, None
+
+
+def ref_has_adr_records(ref: str) -> bool:
+    """Whether the ref carries any ``ADR-*.md`` record under ``docs/adr``.
+
+    A ``docs/adr`` directory that exists but holds no ``ADR-*.md`` file — for
+    example only a README or a pre-convention record name — yields no
+    baseline records either, so both cases honestly answer ``False``.
+    """
+    listing = git("ls-tree", "-r", "--name-only", ref, "--", "docs/adr")
+    if listing.returncode != 0:
+        return False
+    return any(
+        path.endswith(".md") and Path(path).name.startswith("ADR-")
+        for path in listing.stdout.splitlines()
+    )
 
 
 def check_adr_actual() -> None:
-    ref = resolve_baseline_ref()
+    ref, warning = resolve_baseline_ref()
     if ref is None:
         print(
             "SKIP adr: no local main or origin/main ref; "
             "the fixture still validates baseline handling"
+        )
+        return
+    if warning:
+        print(warning)
+    if not ref_has_adr_records(ref):
+        # Reviewer I-8: without ADR records in the baseline ref nothing about
+        # the merged baseline can be asserted here, so print a non-asserting
+        # line instead of PASS; the fixtures carry the real assertions.
+        print(
+            f"SKIP adr (live tree): the resolved baseline ref {ref!r} contains "
+            "no ADR-*.md record under docs/adr; merged-baseline handling is "
+            "asserted only by the fixtures"
         )
         return
     baseline = adrs_from_ref(ref)
@@ -1134,13 +1364,218 @@ def check_adr_actual() -> None:
         )
 
 
-def validate_report(report: dict[str, Any]) -> None:
+# Evidence entries that are case-insensitively equal to one of these, or
+# empty/whitespace, are treated as absent. The shared feedback contract uses
+# `none` as the explicit "no content" sentinel for empty report fields, so a
+# sentinel item in `evidence` cannot support a `covered` claim.
+VACUOUS_EVIDENCE_TERMS = {
+    "",
+    "none",
+    "n/a",
+    "n.a.",
+    "na",
+    "-",
+    "--",
+    "tbd",
+    "no evidence",
+    "none.",
+}
+
+
+def absent_evidence_entry(item: Any) -> bool:
+    """Whether one evidence entry carries no content."""
+    return (
+        not isinstance(item, str)
+        or item.strip() == ""
+        or item.strip().lower() in VACUOUS_EVIDENCE_TERMS
+    )
+
+
+def evidence_supports_covered(entry: dict[str, Any]) -> bool:
+    """Feedback-contract rule 2: a covered claim needs string evidence.
+
+    ``evidence`` must be a non-empty list of strings whose items carry
+    content; items that are ``absent_evidence_entry()`` count as absent, so a
+    list consisting only of vacuous sentinels (for example ``["none"]``)
+    leaves the claim unsupported. Anything else leaves the claim unsupported.
+    """
+    evidence = entry.get("evidence")
+    if not isinstance(evidence, list) or len(evidence) == 0:
+        return False
+    if not all(isinstance(item, str) for item in evidence):
+        return False
+    return any(not absent_evidence_entry(item) for item in evidence)
+
+
+def validate_report(report: dict[str, Any], scenario: dict[str, Any]) -> None:
+    """Validate one report against its scenario.
+
+    Beyond field presence and the status enum, the report must match the
+    scenario identity — the issue and the task declared for its agent — and
+    its coverage entries must carry support: a ``covered`` claim needs
+    evidence that survives the vacuous-sentinel filter of
+    ``evidence_supports_covered`` and a ``not_applicable`` claim needs a note
+    explaining why. ``supersedes`` entries must name tasks the scenario
+    declares for the same agent; unknown, cross-agent and self-supersession
+    targets are rejected.
+    """
+    agent = report.get("agent", "<unknown>")
     missing = [field for field in REPORT_FIELDS if field not in report]
-    require(not missing, f"report {report.get('agent', '<unknown>')} misses fields: {missing}")
+    require(not missing, f"report {agent} misses fields: {missing}")
     require(report["status"] in REPORT_STATUSES, f"invalid report status: {report['status']}")
+
+    scenario_issue = scenario.get("issue")
+    require(
+        report["issue"] == scenario_issue,
+        f"report {agent}: issue {report['issue']!r} does not match scenario "
+        f"issue {scenario_issue!r}",
+    )
+
+    task_id = report["task_id"]
+    require(
+        isinstance(task_id, str) and task_id.strip() != "",
+        f"report {agent}: task_id must be a non-empty string",
+    )
+    tasks = scenario.get("tasks", {})
+    declared = tasks.get(agent) if isinstance(tasks, dict) else None
+    require(
+        declared is not None,
+        f"report {agent}: the scenario declares no task for agent {agent!r}",
+    )
+    allowed_tasks = list(declared) if isinstance(declared, list) else [declared]
+    require(
+        task_id in allowed_tasks,
+        f"report {agent}: task_id {task_id!r} does not match the scenario "
+        f"task declared for this agent: {allowed_tasks!r}",
+    )
+
     for entry in report["acceptance_criteria_coverage"]:
-        require("criterion_id" in entry, "coverage entry misses criterion_id")
-        require(entry.get("coverage") in COVERAGE_VALUES, f"invalid coverage: {entry}")
+        require(
+            "criterion_id" in entry,
+            f"report {agent}: coverage entry misses criterion_id: {entry}",
+        )
+        require(
+            entry.get("coverage") in COVERAGE_VALUES,
+            f"report {agent}: invalid coverage for "
+            f"{entry.get('criterion_id')!r}: {entry.get('coverage')!r}",
+        )
+        if entry["coverage"] == "covered":
+            require(
+                evidence_supports_covered(entry),
+                f"report {agent}: coverage {entry.get('criterion_id')!r} is "
+                "marked covered without evidence: 'evidence' must be a "
+                "non-empty list of non-empty strings, and vacuous sentinel "
+                "entries such as 'none' count as absent",
+            )
+        if entry["coverage"] == "not_applicable":
+            notes = entry.get("notes")
+            require(
+                isinstance(notes, str) and notes.strip() != "",
+                f"report {agent}: coverage {entry.get('criterion_id')!r} is "
+                "marked not_applicable without a note explaining why: "
+                "'notes' must be a non-empty string",
+            )
+
+    supersedes = report.get("supersedes", [])
+    require(
+        isinstance(supersedes, list)
+        and all(isinstance(task, str) and task.strip() != "" for task in supersedes),
+        f"report {agent}: 'supersedes' must be a list of non-empty task_id strings",
+    )
+    # Supersession identity: each target must name a task the scenario
+    # declares for this same agent. Self-supersession, targets of other
+    # agents and phantom targets are rejected here instead of silently
+    # dropping nothing or dropping another agent's report.
+    scenario_tasks = scenario.get("tasks") if isinstance(scenario.get("tasks"), dict) else {}
+    for target in supersedes:
+        require(
+            target != task_id,
+            f"report {agent}: 'supersedes' entry {target!r} supersedes its own "
+            "task; supersession must point at another task of the same agent",
+        )
+        if target in allowed_tasks:
+            continue
+        holder = None
+        for other, value in scenario_tasks.items():
+            declared_for_other = list(value) if isinstance(value, list) else [value]
+            if other != agent and target in declared_for_other:
+                holder = other
+                break
+        if holder is not None:
+            require(
+                False,
+                f"report {agent}: 'supersedes' entry {target!r} supersedes a "
+                f"task declared for another agent ({holder!r}); supersession "
+                "is scoped to the reporting agent's own tasks",
+            )
+        all_ids = sorted(
+            declared
+            for value in scenario_tasks.values()
+            for declared in (list(value) if isinstance(value, list) else [value])
+        )
+        require(
+            False,
+            f"report {agent}: 'supersedes' entry {target!r} supersedes an "
+            f"unknown task; the scenario declares the tasks {all_ids} "
+            f"for agents {sorted(scenario_tasks)}",
+        )
+
+
+def assert_acyclic_supersession(reports: list[dict[str, Any]]) -> None:
+    """Reject circular supersession instead of silently dropping both reports.
+
+    A cycle (report A supersedes report B while B supersedes A) would let the
+    drop step below remove every participating report without a visible gap.
+    The graph is built from the ``supersedes`` entries whose target is the
+    ``task_id`` of another report in the batch; targets without a report drop
+    nothing, so chains through them cannot cycle.
+    """
+    edges: dict[str, set[str]] = {}
+    for report in reports:
+        targets = set(report.get("supersedes", []) or [])
+        edges.setdefault(report["task_id"], set()).update(targets)
+    visiting: set[str] = set()
+    done: set[str] = set()
+    path: list[str] = []
+
+    def visit(node: str) -> None:
+        visiting.add(node)
+        path.append(node)
+        for target in sorted(edges.get(node, ())):
+            if target not in edges or target in done:
+                continue
+            if target in visiting:
+                raise CheckError(
+                    "cyclic 'supersedes' chain "
+                    + " -> ".join(path[path.index(target):] + [target])
+                    + "; superseding reports must form an acyclic chain"
+                )
+            visit(target)
+        path.pop()
+        visiting.discard(node)
+        done.add(node)
+
+    for node in sorted(edges):
+        if node not in done:
+            visit(node)
+
+
+def drop_superseded_reports(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop reports whose task_id another report supersedes.
+
+    Supersession models a re-done task: the newer report lists the older
+    report's ``task_id`` in its ``supersedes`` list and the superseded report
+    no longer participates in reconciliation. Reports without supersession
+    pass through unchanged. Supersession identity and acyclicity are asserted
+    by ``validate_report`` and ``assert_acyclic_supersession`` before the
+    drop, so only legitimate single-direction drops reach this step.
+    """
+    superseded = {
+        task for report in reports for task in report.get("supersedes", []) or []
+    }
+    if not superseded:
+        return reports
+    return [report for report in reports if report["task_id"] not in superseded]
 
 
 def reconcile(
@@ -1156,7 +1591,15 @@ def reconcile(
             for entry in report["acceptance_criteria_coverage"]:
                 if entry["criterion_id"] == criterion_id:
                     entries.append({**entry, "agent": report["agent"]})
-        coverage_values = {entry["coverage"] for entry in entries}
+        # Only supported claims count towards coverage: a 'covered' entry
+        # without evidence is dropped from the status, evidence and
+        # disagreement computation even if a caller skipped validation.
+        counted = [
+            entry
+            for entry in entries
+            if entry["coverage"] != "covered" or evidence_supports_covered(entry)
+        ]
+        coverage_values = {entry["coverage"] for entry in counted}
         if "covered" in coverage_values:
             status = "covered"
         elif "partial" in coverage_values:
@@ -1174,9 +1617,16 @@ def reconcile(
         for agent in delegated:
             if not any(entry["agent"] == agent for entry in entries):
                 criterion_gaps.append(f"delegated_unreported:{agent}")
+        if len(coverage_values) > 1:
+            # Contradictory claims surface as a disagreement gap while the
+            # status rule above stays in force: a valid covered entry still
+            # wins, so the disagreement is visible without discarding it.
+            criterion_gaps.append(
+                "disagreement:" + "/".join(sorted(coverage_values))
+            )
 
         evidence = sorted(
-            {item for entry in entries for item in entry.get("evidence", [])}
+            {item for entry in counted for item in entry.get("evidence", [])}
         )
         ledger[criterion_id] = {
             "title": criterion.get("title", ""),
@@ -1230,21 +1680,24 @@ def print_ledger(
         print(f"  - {escalation}")
 
 
-def check_reports(scenario_path: Path) -> None:
-    scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+def load_scenario_reports(
+    scenario_path: Path, scenario: dict[str, Any]
+) -> list[dict[str, Any]]:
     base = scenario_path.parent
-    criteria = json.loads((base / scenario["criteria_file"]).read_text(encoding="utf-8"))[
-        "criteria"
-    ]
-    reports = []
+    reports: list[dict[str, Any]] = []
     for relative in scenario["reports"]:
         report = json.loads((base / relative).read_text(encoding="utf-8"))
-        validate_report(report)
+        validate_report(report, scenario)
         reports.append(report)
+    return reports
 
-    ledger, gaps, escalations = reconcile(criteria, reports)
-    print_ledger(ledger, gaps, escalations)
 
+def assert_scenario_expectations(
+    scenario: dict[str, Any],
+    ledger: dict[str, dict[str, Any]],
+    gaps: list[str],
+    escalations: list[str],
+) -> None:
     expected = scenario["expected"]
     actual_status = {criterion_id: entry["status"] for criterion_id, entry in ledger.items()}
     require(
@@ -1271,7 +1724,96 @@ def check_reports(scenario_path: Path) -> None:
                 expected_escalation in escalations,
                 f"expected escalation not found: {expected_escalation}",
             )
+
+
+def run_report_scenario(
+    scenario_path: Path, check_expectations: bool = True
+) -> tuple[dict[str, dict[str, Any]], list[str], list[str]]:
+    """Validate, supersede-filter and reconcile one report scenario.
+
+    With ``check_expectations`` the scenario's ``expected`` block is asserted
+    exactly; invalid-fixture runs disable it because a well-formed failure
+    must surface from validation or reconciliation itself.
+    """
+    scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+    base = scenario_path.parent
+    criteria = json.loads((base / scenario["criteria_file"]).read_text(encoding="utf-8"))[
+        "criteria"
+    ]
+    reports = load_scenario_reports(scenario_path, scenario)
+    assert_acyclic_supersession(reports)
+    reports = drop_superseded_reports(reports)
+    ledger, gaps, escalations = reconcile(criteria, reports)
+    if check_expectations:
+        assert_scenario_expectations(scenario, ledger, gaps, escalations)
+    return ledger, gaps, escalations
+
+
+INVALID_REPORT_FIXTURES = FIXTURES / "workflow" / "invalid"
+
+
+def check_invalid_report_fixtures() -> None:
+    """Run every invalid report fixture; failures name the case and reason.
+
+    Each case directory under ``docs/validation/fixtures/workflow/invalid/``
+    holds one ``scenario.json``. A scenario with an ``invalid.error``
+    substring must fail validation or reconciliation with a message
+    containing that substring; any other scenario reconciles normally and its
+    ``expected`` block asserts the stated ledger, gaps and escalations.
+    """
+    require(
+        INVALID_REPORT_FIXTURES.is_dir(),
+        f"missing invalid report fixture directory: {INVALID_REPORT_FIXTURES}",
+    )
+    cases = sorted(path for path in INVALID_REPORT_FIXTURES.iterdir() if path.is_dir())
+    require(bool(cases), "at least one invalid report fixture case is required")
+    for case_dir in cases:
+        label = case_dir.name
+        scenario_path = case_dir / "scenario.json"
+        require(
+            scenario_path.is_file(),
+            f"invalid report fixture {label}: scenario.json is required",
+        )
+        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+        failure = scenario.get("invalid", {}).get("error")
+        if failure is None:
+            run_report_scenario(scenario_path)
+            print(f"invalid report fixture {label}: reconciled with the stated gaps")
+            continue
+        try:
+            run_report_scenario(scenario_path, check_expectations=False)
+        except CheckError as error:
+            require(
+                failure in str(error),
+                f"invalid report fixture {label}: expected an error containing "
+                f"{failure!r}, got: {error}",
+            )
+            print(f"invalid report fixture {label}: rejected as expected: {failure}")
+            continue
+        raise CheckError(
+            f"invalid report fixture {label}: expected a CheckError containing "
+            f"{failure!r}, but the reports validated and reconciled cleanly"
+        )
+    print(
+        f"PASS reports negative fixtures: {len(cases)} invalid report cases "
+        "fail or reconcile exactly as stated"
+    )
+
+
+def check_reports(scenario_path: Path) -> None:
+    scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+    base = scenario_path.parent
+    criteria = json.loads((base / scenario["criteria_file"]).read_text(encoding="utf-8"))[
+        "criteria"
+    ]
+    reports = load_scenario_reports(scenario_path, scenario)
+    assert_acyclic_supersession(reports)
+    reports = drop_superseded_reports(reports)
+    ledger, gaps, escalations = reconcile(criteria, reports)
+    print_ledger(ledger, gaps, escalations)
+    assert_scenario_expectations(scenario, ledger, gaps, escalations)
     print("PASS reports: synthetic reports reconcile with the exact expected gaps and escalations")
+    check_invalid_report_fixtures()
 
 
 def check_adr_fixture() -> None:
@@ -1290,6 +1832,48 @@ def check_adr_fixture() -> None:
     require(
         any(conflict["proposal"] == "ADR-0002" for conflict in conflicts),
         "fixture conflict with the baseline must be escalated",
+    )
+
+
+def check_adr_combined_fixture() -> None:
+    """Model the real combined layout: merged baseline plus open proposals.
+
+    The default branch already carries the accepted ADR-0001 requirements
+    baseline and the accepted ADR-0003 bootstrap, while the open pull request
+    adds ADR-0002 and a changed ADR-0003 that reuses the merged identifier.
+    The accepted baseline stays in force: both new records remain proposals
+    with an effective status of ``Proposed`` while the pull request is open,
+    and a proposal that conflicts with the accepted merged bootstrap still
+    escalates.
+    """
+    base = FIXTURES / "adr" / "combined"
+    baseline = adrs_from_dir(base / "baseline", "merged")
+    open_pr = adrs_from_dir(base / "open-pr", "open_pr")
+    baseline_ids, proposals, conflicts = check_adr(baseline, open_pr)
+    require(
+        baseline_ids == {"ADR-0001", "ADR-0003"},
+        "combined fixture baseline must contain the merged ADR-0001 "
+        f"requirements baseline and the accepted bootstrap ADR-0003, got "
+        f"{sorted(baseline_ids)}",
+    )
+    proposal_ids = [proposal["id"] for proposal in proposals]
+    require(
+        proposal_ids == ["ADR-0002", "ADR-0003"],
+        "combined fixture must contain the open proposals ADR-0002 and the "
+        f"changed ADR-0003, got {proposal_ids}",
+    )
+    require(
+        all(proposal["effective_status"] == "Proposed" for proposal in proposals),
+        "combined fixture proposals must stay effective 'Proposed' while the "
+        "pull request is open",
+    )
+    require(
+        any(
+            conflict["proposal"] == "ADR-0002" and conflict["baseline"] == "ADR-0003"
+            for conflict in conflicts
+        ),
+        "a combined-layout proposal that conflicts with the merged bootstrap "
+        "must escalate",
     )
 
 
@@ -1412,6 +1996,163 @@ def check_adr_in_memory_fixture() -> None:
     )
 
 
+def check_reconcile_in_memory_fixture() -> None:
+    """Prove the reconciliation guards in code, without fixture files.
+
+    The negative fixtures cover the report-validated path; this fixture pins
+    the defence-in-depth rules in code: an empty-evidence and a
+    sentinel-only ``covered`` claim must not produce a covered ledger row,
+    contradictory coverage values surface as a disagreement gap without
+    discarding a valid covered entry, self-supersession is rejected and a
+    cyclic ``supersedes`` chain is rejected instead of silently dropping
+    both reports.
+    """
+    criteria = [
+        {
+            "id": "AC-01",
+            "title": "In-memory reconciliation guard",
+            "delegated_to": ["planner"],
+        }
+    ]
+
+    def report(
+        agent: str,
+        task_id: str,
+        report_status: str,
+        entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "agent": agent,
+            "issue": 30,
+            "task_id": task_id,
+            "status": report_status,
+            "acceptance_criteria_coverage": entries,
+            "missing_requirements": [],
+            "adr_alignment": {},
+        }
+
+    def expect_error(label: str, call: Any, needle: str) -> None:
+        try:
+            call()
+        except CheckError as error:
+            require(
+                needle in str(error),
+                f"{label}: expected error containing {needle!r}, got: {error}",
+            )
+            return
+        raise CheckError(f"{label}: expected CheckError containing {needle!r}")
+
+    empty = report(
+        "planner",
+        "issue-30-support",
+        "Completed",
+        [{"criterion_id": "AC-01", "coverage": "covered", "evidence": []}],
+    )
+    ledger, gaps, _ = reconcile(criteria, [empty])
+    require(
+        ledger["AC-01"]["status"] == "missing",
+        "an empty-evidence covered claim must not produce a covered ledger "
+        f"row: got {ledger['AC-01']['status']}",
+    )
+    require(
+        "follow_up:AC-01" in gaps,
+        "an unsupported covered claim must leave the follow_up gap",
+    )
+
+    sentinel = report(
+        "planner",
+        "issue-30-support",
+        "Completed",
+        [{"criterion_id": "AC-01", "coverage": "covered", "evidence": ["none"]}],
+    )
+    ledger, _, _ = reconcile(criteria, [sentinel])
+    require(
+        ledger["AC-01"]["status"] == "missing",
+        "a sentinel-evidence ('none') covered claim must not produce a "
+        f"covered ledger row: got {ledger['AC-01']['status']}",
+    )
+
+    supported = report(
+        "implementer",
+        "issue-30-support",
+        "Completed",
+        [{"criterion_id": "AC-01", "coverage": "covered", "evidence": ["docs/x.md"]}],
+    )
+    contradicting = report(
+        "reviewer",
+        "issue-30-support-r2",
+        "Partial",
+        [{"criterion_id": "AC-01", "coverage": "unverified", "evidence": ["docs/x.md"]}],
+    )
+    ledger, gaps, _ = reconcile(criteria, [supported, contradicting])
+    require(
+        ledger["AC-01"]["status"] == "covered",
+        "a valid covered entry must still win the status rule: "
+        f"got {ledger['AC-01']['status']}",
+    )
+    require(
+        "AC-01:disagreement:covered/unverified" in gaps,
+        "contradictory coverage values must surface as a disagreement gap: "
+        f"gaps are {gaps}",
+    )
+
+    def full_report(supersedes: list[str], task_id: str = "issue-30-a") -> dict[str, Any]:
+        base = report("tester", task_id, "Completed", [])
+        base.update(
+            {
+                "completed_work": [],
+                "findings": [],
+                "assumptions": [],
+                "dependencies": [],
+                "recommended_next_actions": [],
+                "feedback": {},
+                "supersedes": supersedes,
+            }
+        )
+        return base
+
+    scenario = {"issue": 30, "tasks": {"tester": ["issue-30-a", "issue-30-b"]}}
+    expect_error(
+        "self-supersession",
+        lambda: validate_report(full_report(["issue-30-a"]), scenario),
+        "supersedes its own task",
+    )
+    expect_error(
+        "unknown supersession target",
+        lambda: validate_report(full_report(["issue-30-phantom"]), scenario),
+        "supersedes an unknown task",
+    )
+    cross_scenario = {
+        "issue": 30,
+        "tasks": {"tester": "issue-30-a", "implementer": "issue-30-impl"},
+    }
+    expect_error(
+        "cross-agent supersession",
+        lambda: validate_report(full_report(["issue-30-impl"]), cross_scenario),
+        "supersedes a task declared for another agent",
+    )
+    expect_error(
+        "cyclic supersession",
+        lambda: assert_acyclic_supersession(
+            [
+                {"task_id": "issue-30-a", "supersedes": ["issue-30-b"]},
+                {"task_id": "issue-30-b", "supersedes": ["issue-30-a"]},
+            ]
+        ),
+        "cyclic 'supersedes' chain",
+    )
+    require(
+        validate_report(full_report(["issue-30-b"]), scenario) is None,
+        "a legitimate same-agent supersession must validate",
+    )
+    print(
+        "PASS reports in-memory fixtures: empty and sentinel-evidence covered "
+        "claims stay unsupported, contradictory coverage values surface as "
+        "disagreement, and self-, cross-agent, unknown and cyclic supersession "
+        "is rejected"
+    )
+
+
 def check_permissions_fixture() -> None:
     base = FIXTURES / "permissions"
     broad_rules = parse_permissions(base / "planner-broad-allow.md")
@@ -1434,9 +2175,32 @@ def check_permissions_fixture() -> None:
 
 def check_fixtures() -> None:
     check_adr_fixture()
+    check_adr_combined_fixture()
     check_adr_in_memory_fixture()
     check_permissions_fixture()
+    check_reconcile_in_memory_fixture()
     check_reports(FIXTURES / "workflow" / "scenario.json")
+
+
+def check_self_audit() -> None:
+    """Audit this validator statically before its results are trusted.
+
+    ``all`` runs the sibling auditor as its first step. The auditor imports
+    only the standard library, parses this file as an AST and fails on
+    anything outside its audited boundary; a failure raises the same
+    ``CheckError`` every other check uses.
+    """
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import audit_validator
+
+    findings = audit_validator.audit_module(Path(__file__))
+    require(
+        findings == 0,
+        f"the validator failed its own audit with {findings} finding(s); "
+        "see the FAIL audit lines above",
+    )
 
 
 def main() -> int:
@@ -1454,6 +2218,8 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
+        if args.command == "all":
+            check_self_audit()
         if args.command in {"config", "all"}:
             check_config()
         if args.command == "adr":

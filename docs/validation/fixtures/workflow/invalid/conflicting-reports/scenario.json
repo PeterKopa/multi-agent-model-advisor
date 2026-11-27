@@ -1,0 +1,37 @@
+{
+  "description": "Invalid report fixture: two reports disagree on AC-04 — one covers it with evidence, one reports unverified. Reconciliation must keep the covered status rule and surface the disagreement:covered/unverified gap.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "tasks": {
+    "implementer": "issue-30-implementation",
+    "reviewer": "issue-30-plan-review"
+  },
+  "reports": ["reports/implementer.json", "reports/reviewer.json"],
+  "expected": {
+    "ledger": {
+      "AC-01": "missing",
+      "AC-02": "missing",
+      "AC-03": "missing",
+      "AC-04": "covered",
+      "AC-05": "missing",
+      "AC-06": "missing",
+      "AC-07": "missing"
+    },
+    "gaps": [
+      "AC-01:delegated_unreported:planner",
+      "AC-02:delegated_unreported:planner",
+      "AC-03:delegated_unreported:planner",
+      "AC-04:disagreement:covered/unverified",
+      "AC-05:delegated_unreported:tester",
+      "AC-06:delegated_unreported:orchestrator",
+      "AC-07:not_delegated",
+      "follow_up:AC-01",
+      "follow_up:AC-02",
+      "follow_up:AC-03",
+      "follow_up:AC-05",
+      "follow_up:AC-06",
+      "follow_up:AC-07"
+    ],
+    "escalations": []
+  }
+}

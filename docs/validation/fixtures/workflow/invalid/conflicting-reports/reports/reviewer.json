@@ -1,0 +1,34 @@
+{
+  "agent": "reviewer",
+  "issue": 30,
+  "task_id": "issue-30-plan-review",
+  "status": "Partial",
+  "completed_work": [
+    "Reviewed the coverage claim for AC-04 and could not confirm the evidence."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "unverified",
+      "evidence": ["docs/workflow/feedback-contract.md"],
+      "notes": "The contract file exists, but the independent verification is still open."
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

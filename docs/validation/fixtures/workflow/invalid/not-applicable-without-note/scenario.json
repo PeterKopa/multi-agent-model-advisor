@@ -1,0 +1,12 @@
+{
+  "description": "Invalid report fixture: a coverage entry marked not_applicable without a note explaining why must be rejected by validate_report.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "tasks": {
+    "implementer": "issue-30-implementation"
+  },
+  "reports": ["reports/implementer.json"],
+  "invalid": {
+    "error": "without a note explaining why"
+  }
+}

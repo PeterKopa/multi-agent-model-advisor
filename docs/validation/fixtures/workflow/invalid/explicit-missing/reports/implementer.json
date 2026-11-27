@@ -1,0 +1,40 @@
+{
+  "agent": "implementer",
+  "issue": 30,
+  "task_id": "issue-30-implementation",
+  "status": "Partial",
+  "completed_work": [
+    "Partially implemented the delegated work and reports the gap itself."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "missing",
+      "evidence": []
+    }
+  ],
+  "missing_requirements": [
+    {
+      "criterion_id": "AC-04",
+      "reason": "The delegated work is incomplete; no verified evidence exists for the shared feedback contract yet."
+    }
+  ],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [
+    "Re-delegate AC-04 with a narrower scope so the missing work is covered."
+  ],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

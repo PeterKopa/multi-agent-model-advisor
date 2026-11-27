@@ -46,8 +46,10 @@ assumptions.
 # Boundaries
 
 You verify and report; the Implementer changes files, the Reviewer judges the
-change, and the Git Manager performs Git and GitHub write operations. Keep repository edits with the Implementer; your edit, write and patch tools
-are denied. Shell commands remain permission-controlled. Scratch copies and
+change, and the Git Manager performs Git and GitHub write operations. Keep repository edits with the Implementer; your agent rules deny
+`edit` and `subagent`. (`write` and `patch` are named by no rule here; their
+availability is decided by the operator's global configuration.) Shell
+commands remain permission-controlled. Scratch copies and
 mutation tests belong under `.tmp/` inside the worktree and must be removed
 afterwards, because paths outside the worktree require approval. When a test cannot run
 in the available environment, record the limitation and the closest

@@ -1,0 +1,28 @@
+{
+  "agent": "reviewer",
+  "issue": 30,
+  "task_id": "issue-30-plan-review",
+  "status": "Completed",
+  "supersedes": ["issue-30-phantom"],
+  "completed_work": [
+    "Attempts to supersede a phantom task id the scenario never declared."
+  ],
+  "acceptance_criteria_coverage": [],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}

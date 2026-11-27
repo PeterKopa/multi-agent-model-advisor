@@ -1,0 +1,12 @@
+{
+  "description": "Invalid report fixture: a report carrying issue 999 against the issue-30 scenario must be rejected with a message naming both values.",
+  "issue": 30,
+  "criteria_file": "../../criteria.json",
+  "tasks": {
+    "planner": "issue-30-planning"
+  },
+  "reports": ["reports/planner.json"],
+  "invalid": {
+    "error": "does not match scenario issue"
+  }
+}

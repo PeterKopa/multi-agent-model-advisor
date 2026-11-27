@@ -22,9 +22,9 @@ and is scoped to the development workflow and its supporting documentation.
 | --- | --- | --- | --- |
 | `orchestrator` | primary | Intake, delegation, ledger, reconciliation, escalation and handover | Read access, ledger edits under `docs/workflow/ledgers/`, launching the five specialist subagents |
 | `planner` | subagent | Acceptance-criteria-driven planning, architecture impact, ADR proposals | Read access and edits under `docs/adr/` |
-| `reviewer` | subagent | Independent plan review and independent code review | Edit/write/patch tools denied; shell remains permission-controlled |
+| `reviewer` | subagent | Independent plan review and independent code review | `edit` denied by its agent rules (`write`/`patch` are named by no rule in this repository); shell remains permission-controlled |
 | `implementer` | subagent | Implementation, tests and implementation evidence | Repository edits and local commands |
-| `tester` | subagent | Independent verification, test execution and reproducible evidence | Edit/write/patch tools denied; local command execution |
+| `tester` | subagent | Independent verification, test execution and reproducible evidence | `edit` denied by its agent rules (`write`/`patch` are named by no rule in this repository); local command execution |
 | `git-manager` | subagent | Branch, commit, push and pull-request preparation after approval; merge stays with the human user | Git and GitHub write operations, except pull-request merge |
 
 The Orchestrator is the only agent that launches subagents. The Reviewer and
@@ -56,8 +56,11 @@ each subcommand; separators inside quoted wrapper arguments do not split.
 
 - **Git and GitHub by default.** `git *`, `gh *`, `rtk git *` and `rtk gh *` are
   denied first. Read-only inspection (status, diff, log, show, rev-parse,
-  ls-files, ls-tree, blame, grep, describe, shortlog, merge-base, and the
-  read-only `gh` subcommands) is re-enabled in both plain and RTK form. The Git Manager
+  rev-list, ls-files, ls-tree, blame, grep, describe, shortlog, merge-base,
+  and the read-only `gh` subcommands) is re-enabled in both plain and RTK
+  form. Plain `ls` is an explicitly allowed read-only convenience and `cat` is
+  approval-gated (`ask`); the credential shell mirrors further down still win
+  by last-match, so neither can reach a denied path. The Git Manager
   appends allow rules for the write commands it owns — including the RTK
   mirrors `rtk git add/branch/checkout/commit/push/switch` and
   `rtk gh pr create` — and repeats the protected denials **after** its allows so
@@ -68,7 +71,31 @@ each subcommand; separators inside quoted wrapper arguments do not split.
   request is reserved for the human user. Direct pushes to `main` —
   `git push <remote> main`, `git push <remote> HEAD:main` and
   `git push <remote> HEAD:refs/heads/main`, plus their RTK forms — are denied
-  even for the Git Manager. Because the shell scanner evaluates every
+  for every agent. Pushes are controlled by an allowlist instead of a deny
+  category: the Git Manager's single push allow is `git push origin ?*`
+  (with the RTK mirror `rtk git push origin ?*`), where the `?` matches
+  exactly one character, so the allow requires a non-empty refspec after the
+  remote and the handover shape —
+  `git push origin <branch>` or `git push origin HEAD`, an explicit origin
+  refspec every time — is the only push that passes for that agent. Any push
+  that does not name `origin` with a non-empty refspec — another remote name
+  (`git push upstream`, `git push github`), a bare `git push`, or a
+  remote-only `git push origin` (with or without a trailing space) whose
+  implicit refspec can resolve to a
+  configured upstream (which can be `main`) — matches no Git Manager allow
+  and falls back to the project-level `git *` deny. Because the Git Manager's
+  own allows can override every project deny, its final rules re-create the
+  second deny layer: every option-bearing push (`git push -*` and
+  `git push * -*`, plain and RTK — any argument that starts with `-`,
+  wherever it sits after the verb) is denied, which subsumes all force
+  spellings (`--force`, `--force-with-lease` and any short or clustered form
+  such as `-uf` or `-uvqf`), `--mirror`, `--all`, `--delete` and its short
+  `-d`, and the quiet or dry-run options (`-q`, `--quiet`, `--dry-run`,
+  `--follow-tags`); and the blanket `+` and ` :` rules deny a `+`-prefixed
+  refname in any position and a delete refspec with or without a remote — a
+  legal refname holding a plus sign is denied by the same side effect.
+  Because the shell
+  scanner evaluates every
   extracted subcommand, these protected operations deny in direct and
   compound invocations: `git fetch origin && gh pr merge 1` denies on the
   second subcommand even though the first is a legitimate Git Manager
@@ -115,6 +142,18 @@ each subcommand; separators inside quoted wrapper arguments do not split.
 - **Scratch convention.** Paths outside the worktree require approval, so
   scratch copies and mutation tests belong under `.tmp/` inside the worktree
   and must be removed afterwards; `.tmp/` is listed in `.gitignore`.
+- **Guardrail, not sandbox.** The permission model is a command-level
+  guardrail, not a sandbox. It denies and asks on the listed paths and
+  command forms, while a shell command that matches no rule resolves to
+  `allow` by design in OpenCode. The explicit `ls` and `cat` rules document
+  intent within that model, they do not close it; `echo` is deliberately
+  unnamed as a convenience because it is a write primitive through `>` and
+  `>>`. The Go quality toolchain is allowed directly for every agent, and
+  tools or MCP servers inherited from the operator's global configuration sit
+  outside this per-role boundary. Role discipline, the review gates and the
+  human-approved handover remain part of the control set, and repository-side
+  branch protection plus a per-role tool and MCP lockdown are open decisions
+  escalated to the human owner.
 
 The offline validator in `tools/workflow_check.py` resolves the full combined
 rule set for every agent with last-match-wins semantics and asserts these
@@ -255,11 +294,17 @@ short:
 
 ## Validation
 
-The workflow is validated offline with fixtures and synthetic reports:
+The workflow is validated offline with fixtures and synthetic reports. Run the
+validator audit first, then the validator itself:
 
 ```bash
+python3 tools/audit_validator.py
 python3 tools/workflow_check.py all
 ```
+
+`all` audits the validator statically with `tools/audit_validator.py` before it
+runs any check, so its results are only trusted when the audit passes. The
+audit and the validator are guardrails, not sandboxes.
 
 The validator checks agent configuration and discovery prerequisites, ADR
 baseline handling in an open pull-request scenario, and feedback reconciliation

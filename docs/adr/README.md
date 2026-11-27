@@ -109,9 +109,10 @@ on the existing baseline.
 ## Initial records
 
 ADR-0001 and ADR-0002 are introduced by the workflow change for issue #30.
-ADR-0003 records the issue #27 bootstrap and was merged with PR #31, so the
-Go and Bubble Tea bootstrap decision is already in force on the default
-branch. The normalised ADR-0003 file follows this ADR directory convention
+The Go and Bubble Tea bootstrap decision from issue #27 was approved and
+merged with PR #31, so that decision is already in force on the default
+branch; ADR-0003 is the normalised record of that already-merged decision.
+The normalised ADR-0003 file follows this ADR directory convention
 only through this pull request: while that pull request is open the records
 below are proposals under the rule above, including ADR-0003 even though its
 decision is already in force, and they become part of the baseline when a

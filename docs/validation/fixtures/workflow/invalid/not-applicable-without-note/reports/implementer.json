@@ -1,0 +1,32 @@
+{
+  "agent": "implementer",
+  "issue": 30,
+  "task_id": "issue-30-implementation",
+  "status": "Completed",
+  "completed_work": [
+    "Marks a criterion not applicable without recording why it does not apply."
+  ],
+  "acceptance_criteria_coverage": [
+    {
+      "criterion_id": "AC-04",
+      "coverage": "not_applicable"
+    }
+  ],
+  "missing_requirements": [],
+  "findings": [],
+  "assumptions": [],
+  "dependencies": [],
+  "adr_alignment": {
+    "baseline": [],
+    "proposals": [],
+    "conflicts": [],
+    "decision_needed": []
+  },
+  "recommended_next_actions": [],
+  "feedback": {
+    "delegation": "Clear.",
+    "planning": "Clear.",
+    "instructions": "Clear.",
+    "collaboration": "Clear."
+  }
+}
